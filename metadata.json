@@ -1,0 +1,6 @@
+{
+  "name": "CatchyStore - The Beauty Store",
+  "description": "CatchyStore - The Beauty Store. Premium beauty, skincare, health & lifestyle e-commerce store with AI personalizations, clean organic formulas, fast express delivery, and instant UPI payment integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
