@@ -9,16 +9,25 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { PersonalizedQuizModal } from './components/PersonalizedQuizModal';
 import { OrderTrackingModal } from './components/OrderTrackingModal';
+import { CategoryPage } from './components/CategoryPage';
 import { SubscriptionsManager } from './components/SubscriptionsManager';
 import { AdminPortal } from './components/AdminPortal';
 import { Product, Order } from './types';
-import { Sparkles, RefreshCw, ShieldCheck, Heart, ArrowRight, Star, Leaf, CheckCircle2, QrCode, Lock, Zap, Grid } from 'lucide-react';
+import { Sparkles, RefreshCw, ShieldCheck, Heart, ArrowRight, Star, Leaf, CheckCircle2, QrCode, Lock, Zap, Grid, ChevronDown, ChevronUp } from 'lucide-react';
 
 const CATEGORY_THUMBNAILS: Record<string, string> = {
   'Beauty & Skincare': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
   'Health & Supplements': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800',
   'Lifestyle & Wellness': 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=800',
   'Hair & Body': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=800',
+  'Organic Food & Teas': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800',
+  'Fragrance & Aromatherapy': 'https://images.unsplash.com/photo-1615397349754-cfa2066a298e?auto=format&fit=crop&q=80&w=800',
+  'Baby & Mother Care': 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&q=80&w=800',
+  "Men's Grooming": 'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&q=80&w=800',
+  'Bath & Body Rituals': 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800',
+  'Immunity & Wellness Drinks': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+  'Ayurveda & Herbals': 'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?auto=format&fit=crop&q=80&w=800',
+  'Fitness & Nutrition': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800',
 };
 
 function StorefrontContent() {
@@ -42,6 +51,7 @@ function StorefrontContent() {
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   const getCategoryThumbnail = (catName: string): string => {
     if (CATEGORY_THUMBNAILS[catName]) return CATEGORY_THUMBNAILS[catName];
@@ -79,8 +89,11 @@ function StorefrontContent() {
 
       <main className="flex-1 pb-16">
         
-        {/* VIEW 1: STOREFRONT CATALOG */}
+        {/* VIEW 1: STOREFRONT CATALOG OR DEDICATED CATEGORY PAGE */}
         {activeView === 'store' && (
+          selectedCategory !== 'All' ? (
+            <CategoryPage />
+          ) : (
           <div className="space-y-10">
             
             {/* Hero Section */}
@@ -190,9 +203,9 @@ function StorefrontContent() {
                 )}
               </div>
 
-              {/* Thumbnails Grid */}
+              {/* Thumbnails Grid (Shows 8 categories initially, expandable to show all) */}
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {categories.map((catName) => {
+                {(showAllCategories ? categories : categories.slice(0, 8)).map((catName) => {
                   const count = products.filter(p => p.category === catName).length;
                   const isSelected = selectedCategory === catName;
                   const thumbUrl = getCategoryThumbnail(catName);
@@ -250,7 +263,132 @@ function StorefrontContent() {
                   );
                 })}
               </div>
+
+              {/* Expand / Collapse Button (Shown when categories > 8) */}
+              {categories.length > 8 && (
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={() => setShowAllCategories(!showAllCategories)}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold transition-all shadow-md hover:shadow-xl border border-stone-800 group"
+                  >
+                    {showAllCategories ? (
+                      <>
+                        <span>Show Less Categories</span>
+                        <ChevronUp className="w-4 h-4 text-amber-400 group-hover:-translate-y-0.5 transition-transform" />
+                      </>
+                    ) : (
+                      <>
+                        <span>More Categories (+{categories.length - 8} More)</span>
+                        <ChevronDown className="w-4 h-4 text-amber-400 group-hover:translate-y-0.5 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </section>
+
+            {/* DEFAULT HOMEPAGE SECTIONS (Shown when no specific filter is active) */}
+            {selectedCategory === 'All' && !searchQuery && !selectedConcern && (
+              <>
+                {/* 1. NEW ARRIVALS SECTION */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                  <div className="bg-gradient-to-r from-purple-900/90 via-stone-900 to-rose-950 text-white p-6 sm:p-8 rounded-3xl shadow-lg relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-purple-800/40">
+                    <div className="relative z-10 space-y-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[11px] font-extrabold uppercase tracking-widest">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        Fresh Releases
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl font-bold font-serif text-white">
+                        New Arrivals Collection
+                      </h2>
+                      <p className="text-xs sm:text-sm text-stone-300 max-w-xl">
+                        Discover our newest clinical-grade organic formulations and wellness rituals, freshly crafted for optimal efficacy.
+                      </p>
+                    </div>
+
+                    <div className="relative z-10 shrink-0">
+                      <span className="text-xs font-bold text-amber-300 bg-white/10 px-4 py-2 rounded-2xl border border-white/20 backdrop-blur-md inline-block">
+                        ✨ 100% Authentic & Fresh Batches
+                      </span>
+                    </div>
+
+                    {/* Subtle Background Glow Accent */}
+                    <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+                  </div>
+
+                  {/* New Arrivals Products Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-2">
+                    {(products.filter(p => p.isNewArrival).length > 0
+                      ? products.filter(p => p.isNewArrival)
+                      : products.slice(-4)
+                    ).map((product) => (
+                      <ProductCard
+                        key={`new-arrival-${product.id}`}
+                        product={product}
+                        onQuickView={(p) => setSelectedProductForModal(p)}
+                      />
+                    ))}
+                  </div>
+                </section>
+
+                {/* 2. CATEGORY-BASED PRODUCT DISPLAY SECTIONS */}
+                {categories.map((catName) => {
+                  const catProducts = products.filter(p => p.category === catName);
+                  if (catProducts.length === 0) return null;
+                  const catThumb = getCategoryThumbnail(catName);
+
+                  return (
+                    <section key={`section-cat-${catName}`} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 pt-2">
+                      {/* Category Showcase Header Bar */}
+                      <div className="bg-white p-5 rounded-3xl border border-stone-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={catThumb}
+                            alt={catName}
+                            className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-stone-200 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h2 className="text-xl font-bold text-stone-900 font-serif">{catName}</h2>
+                              <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                {catProducts.length} {catProducts.length === 1 ? 'Item' : 'Items'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-stone-500 mt-0.5">
+                              Handpicked top formulas in {catName.toLowerCase()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedCategory(catName);
+                            if (setSelectedTagFilter) setSelectedTagFilter('All');
+                            const catElem = document.getElementById('catalog');
+                            if (catElem) catElem.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                        >
+                          <span>Explore Full {catName}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-amber-300" />
+                        </button>
+                      </div>
+
+                      {/* Products Grid for this category */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        {catProducts.slice(0, 4).map((product) => (
+                          <ProductCard
+                            key={`cat-showcase-${catName}-${product.id}`}
+                            product={product}
+                            onQuickView={(p) => setSelectedProductForModal(p)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </>
+            )}
 
             {/* Concern Filter Bar */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -316,6 +454,7 @@ function StorefrontContent() {
             </section>
 
           </div>
+          )
         )}
 
         {/* VIEW 2: MY SUBSCRIPTIONS */}
@@ -349,12 +488,22 @@ function StorefrontContent() {
           </div>
 
           <div>
-            <h4 className="text-white font-bold uppercase tracking-wider mb-3">Subscription Benefits</h4>
-            <ul className="space-y-2 text-stone-400">
-              <li>• Save 15-20% on every auto-delivery</li>
-              <li>• Free Express Worldwide Shipping</li>
-              <li>• Skip, Pause, or Cancel anytime</li>
-              <li>• VIP Priority Batch Allocation</li>
+            <h4 className="text-white font-bold uppercase tracking-wider mb-3">Shop Categories</h4>
+            <ul className="space-y-1.5 text-stone-400">
+              {categories.map((cat) => (
+                <li key={`footer-cat-${cat}`}>
+                  <button
+                    onClick={() => {
+                      setSelectedCategory(cat);
+                      setActiveView('store');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="hover:text-amber-300 transition-colors text-xs font-medium"
+                  >
+                    • {cat}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 

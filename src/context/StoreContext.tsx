@@ -55,7 +55,20 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-const DEFAULT_CATEGORIES = ['Beauty & Skincare', 'Health & Supplements', 'Lifestyle & Wellness', 'Hair & Body'];
+const DEFAULT_CATEGORIES = [
+  'Beauty & Skincare',
+  'Health & Supplements',
+  'Lifestyle & Wellness',
+  'Hair & Body',
+  'Organic Food & Teas',
+  'Fragrance & Aromatherapy',
+  'Baby & Mother Care',
+  "Men's Grooming",
+  'Bath & Body Rituals',
+  'Immunity & Wellness Drinks',
+  'Ayurveda & Herbals',
+  'Fitness & Nutrition'
+];
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial state from LocalStorage or defaults
@@ -66,7 +79,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [categories, setCategories] = useState<string[]>(() => {
     const saved = localStorage.getItem('auraglow_categories');
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    if (!saved) return DEFAULT_CATEGORIES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        // Merge to guarantee at least default categories are available
+        const merged = Array.from(new Set([...parsed, ...DEFAULT_CATEGORIES]));
+        return merged;
+      }
+    } catch (e) {
+      return DEFAULT_CATEGORIES;
+    }
+    return DEFAULT_CATEGORIES;
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
