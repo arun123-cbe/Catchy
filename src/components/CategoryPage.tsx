@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
+import { ProductCarousel } from './ProductCarousel';
 import { Product } from '../types';
 import {
   ArrowLeft,
@@ -71,6 +72,7 @@ export const CategoryPage: React.FC = () => {
     selectedTagFilter,
     setSelectedTagFilter,
     setSelectedProductForModal,
+    getCategoryThumbnail,
     formatPrice
   } = useStore();
 
@@ -79,12 +81,13 @@ export const CategoryPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<'featured' | 'price-low' | 'price-high' | 'rating' | 'stock'>('featured');
 
   // Metadata for current category
-  const meta = CATEGORY_META[selectedCategory] || {
-    heroImage: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=1200',
-    tagline: 'Pure & Authentic Botanical Formulas',
-    description: `Browse our curated catalog of premium products in the ${selectedCategory} collection.`,
-    highlights: ['100% Authentic Quality', 'Quality Tested', 'Free Express Shipping', 'Clean Ingredients'],
-    accentColor: 'from-rose-500 to-amber-500',
+  const metaBase = CATEGORY_META[selectedCategory];
+  const meta = {
+    heroImage: metaBase?.heroImage || getCategoryThumbnail(selectedCategory),
+    tagline: metaBase?.tagline || 'Pure & Authentic Botanical Formulas',
+    description: metaBase?.description || `Browse our curated catalog of premium products in the ${selectedCategory} collection.`,
+    highlights: metaBase?.highlights || ['100% Authentic Quality', 'Quality Tested', 'Free Express Shipping', 'Clean Ingredients'],
+    accentColor: metaBase?.accentColor || 'from-rose-500 to-amber-500',
   };
 
   // All products belonging to this category
@@ -404,17 +407,15 @@ export const CategoryPage: React.FC = () => {
           )}
         </div>
 
-        {/* Product Cards Grid */}
+        {/* Product Carousel (Max 9 products) */}
         {processedProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {processedProducts.map((product) => (
-              <ProductCard
-                key={`cat-page-${product.id}`}
-                product={product}
-                onQuickView={(p) => setSelectedProductForModal(p)}
-              />
-            ))}
-          </div>
+          <ProductCarousel
+            products={processedProducts}
+            onQuickView={(p) => setSelectedProductForModal(p)}
+            maxProducts={9}
+            title={`${selectedCategory} Carousel`}
+            subtitle={`Displaying top 9 products in ${selectedCategory}`}
+          />
         ) : (
           <div className="bg-white rounded-3xl border border-stone-200 p-12 text-center space-y-3 max-w-md mx-auto shadow-xs">
             <ShoppingBag className="w-12 h-12 text-stone-300 mx-auto" />

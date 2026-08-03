@@ -5,8 +5,11 @@ import { INITIAL_PRODUCTS, INITIAL_ORDERS } from '../data/initialData';
 interface StoreContextType {
   products: Product[];
   categories: string[];
-  addCategory: (catName: string) => void;
+  categoryThumbnails: Record<string, string>;
+  addCategory: (catName: string, thumbnailUrl?: string) => void;
   deleteCategory: (catName: string) => void;
+  updateCategoryThumbnail: (catName: string, url: string) => void;
+  getCategoryThumbnail: (catName: string) => string;
   cart: CartItem[];
   orders: Order[];
   selectedCategory: string | 'All';
@@ -55,6 +58,21 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
+export const DEFAULT_CATEGORY_THUMBNAILS: Record<string, string> = {
+  'Beauty & Skincare': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
+  'Health & Supplements': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800',
+  'Lifestyle & Wellness': 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=800',
+  'Hair & Body': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=800',
+  'Organic Food & Teas': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800',
+  'Fragrance & Aromatherapy': 'https://images.unsplash.com/photo-1615397349754-cfa2066a298e?auto=format&fit=crop&q=80&w=800',
+  'Baby & Mother Care': 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&q=80&w=800',
+  "Men's Grooming": 'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&q=80&w=800',
+  'Bath & Body Rituals': 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800',
+  'Immunity & Wellness Drinks': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+  'Ayurveda & Herbals': 'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?auto=format&fit=crop&q=80&w=800',
+  'Fitness & Nutrition': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800',
+};
+
 const DEFAULT_CATEGORIES = [
   'Beauty & Skincare',
   'Health & Supplements',
@@ -75,6 +93,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('auraglow_products_v2');
     return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+  });
+
+  const [categoryThumbnails, setCategoryThumbnails] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('auraglow_category_thumbnails');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_CATEGORY_THUMBNAILS, ...parsed };
+      } catch (e) {
+        return DEFAULT_CATEGORY_THUMBNAILS;
+      }
+    }
+    return DEFAULT_CATEGORY_THUMBNAILS;
   });
 
   const [categories, setCategories] = useState<string[]>(() => {
@@ -133,6 +164,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [categories]);
 
   useEffect(() => {
+    localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
+  }, [categoryThumbnails]);
+
+  useEffect(() => {
     localStorage.setItem('auraglow_cart_v2', JSON.stringify(cart));
   }, [cart]);
 
@@ -140,10 +175,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
   }, [orders]);
 
-  const addCategory = (catName: string) => {
+  const updateCategoryThumbnail = (catName: string, url: string) => {
+    if (!catName) return;
+    setCategoryThumbnails(prev => ({
+      ...prev,
+      [catName]: url
+    }));
+  };
+
+  const getCategoryThumbnail = (catName: string): string => {
+    if (categoryThumbnails[catName]) return categoryThumbnails[catName];
+    if (DEFAULT_CATEGORY_THUMBNAILS[catName]) return DEFAULT_CATEGORY_THUMBNAILS[catName];
+    const prodMatch = products.find(p => p.category === catName && p.image);
+    if (prodMatch) return prodMatch.image;
+    return 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+  };
+
+  const addCategory = (catName: string, thumbnailUrl?: string) => {
     const trimmed = catName.trim();
     if (!trimmed || categories.includes(trimmed)) return;
     setCategories(prev => [...prev, trimmed]);
+    if (thumbnailUrl && thumbnailUrl.trim()) {
+      updateCategoryThumbnail(trimmed, thumbnailUrl.trim());
+    }
   };
 
   const deleteCategory = (catName: string) => {
@@ -273,8 +327,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       value={{
         products,
         categories,
+        categoryThumbnails,
         addCategory,
         deleteCategory,
+        updateCategoryThumbnail,
+        getCategoryThumbnail,
         cart,
         orders,
         selectedCategory,

@@ -183,20 +183,7 @@ export const Header: React.FC<{ onOpenQuiz: () => void; onOpenTracking?: () => v
                 )}
               </div>
 
-              {/* Direct Category Links */}
-              {categories.slice(0, 4).map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => handleSelectCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    selectedCategory === cat && selectedTagFilter === 'All'
-                      ? 'bg-rose-50 text-rose-900 font-bold border border-rose-200'
-                      : 'hover:text-stone-900 hover:bg-stone-100'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+
             </div>
 
             {/* Quick Special Collections / Badges Menu Links */}

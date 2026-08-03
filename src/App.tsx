@@ -12,6 +12,7 @@ import { OrderTrackingModal } from './components/OrderTrackingModal';
 import { CategoryPage } from './components/CategoryPage';
 import { SubscriptionsManager } from './components/SubscriptionsManager';
 import { AdminPortal } from './components/AdminPortal';
+import { ProductCarousel } from './components/ProductCarousel';
 import { Product, Order } from './types';
 import { Sparkles, RefreshCw, ShieldCheck, Heart, ArrowRight, Star, Leaf, CheckCircle2, QrCode, Lock, Zap, Grid, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -34,6 +35,7 @@ function StorefrontContent() {
   const {
     products,
     categories,
+    getCategoryThumbnail,
     selectedCategory,
     setSelectedCategory,
     setSelectedTagFilter,
@@ -52,13 +54,6 @@ function StorefrontContent() {
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState('');
   const [showAllCategories, setShowAllCategories] = useState(false);
-
-  const getCategoryThumbnail = (catName: string): string => {
-    if (CATEGORY_THUMBNAILS[catName]) return CATEGORY_THUMBNAILS[catName];
-    const prodMatch = products.find(p => p.category === catName && p.image);
-    if (prodMatch) return prodMatch.image;
-    return 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
-  };
 
   // Filter products by category, search query, and concern
   const filteredProducts = products.filter(p => {
@@ -203,9 +198,9 @@ function StorefrontContent() {
                 )}
               </div>
 
-              {/* Thumbnails Grid (Shows 8 categories initially, expandable to show all) */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {(showAllCategories ? categories : categories.slice(0, 8)).map((catName) => {
+              {/* Thumbnails Grid (Shows 6 categories initially, expandable to show all) */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {(showAllCategories ? categories : categories.slice(0, 6)).map((catName) => {
                   const count = products.filter(p => p.category === catName).length;
                   const isSelected = selectedCategory === catName;
                   const thumbUrl = getCategoryThumbnail(catName);
@@ -264,8 +259,8 @@ function StorefrontContent() {
                 })}
               </div>
 
-              {/* Expand / Collapse Button (Shown when categories > 8) */}
-              {categories.length > 8 && (
+              {/* Expand / Collapse Button (Shown when categories > 6) */}
+              {categories.length > 6 && (
                 <div className="mt-6 text-center">
                   <button
                     onClick={() => setShowAllCategories(!showAllCategories)}
@@ -278,7 +273,7 @@ function StorefrontContent() {
                       </>
                     ) : (
                       <>
-                        <span>More Categories (+{categories.length - 8} More)</span>
+                        <span>More Categories (+{categories.length - 6} More)</span>
                         <ChevronDown className="w-4 h-4 text-amber-400 group-hover:translate-y-0.5 transition-transform" />
                       </>
                     )}
@@ -316,18 +311,19 @@ function StorefrontContent() {
                     <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
                   </div>
 
-                  {/* New Arrivals Products Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-2">
-                    {(products.filter(p => p.isNewArrival).length > 0
-                      ? products.filter(p => p.isNewArrival)
-                      : products.slice(-4)
-                    ).map((product) => (
-                      <ProductCard
-                        key={`new-arrival-${product.id}`}
-                        product={product}
-                        onQuickView={(p) => setSelectedProductForModal(p)}
-                      />
-                    ))}
+                  {/* New Arrivals Products Carousel (Max 9 items) */}
+                  <div className="pt-2">
+                    <ProductCarousel
+                      products={
+                        products.filter(p => p.isNewArrival).length > 0
+                          ? products.filter(p => p.isNewArrival)
+                          : products
+                      }
+                      onQuickView={(p) => setSelectedProductForModal(p)}
+                      maxProducts={9}
+                      title="New Arrivals Carousel"
+                      subtitle="Swipe or scroll through our latest 9 botanical releases"
+                    />
                   </div>
                 </section>
 
@@ -355,7 +351,7 @@ function StorefrontContent() {
                               </span>
                             </div>
                             <p className="text-xs text-stone-500 mt-0.5">
-                              Handpicked top formulas in {catName.toLowerCase()}
+                              Top 9 formulas in {catName.toLowerCase()}
                             </p>
                           </div>
                         </div>
@@ -374,16 +370,12 @@ function StorefrontContent() {
                         </button>
                       </div>
 
-                      {/* Products Grid for this category */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {catProducts.slice(0, 4).map((product) => (
-                          <ProductCard
-                            key={`cat-showcase-${catName}-${product.id}`}
-                            product={product}
-                            onQuickView={(p) => setSelectedProductForModal(p)}
-                          />
-                        ))}
-                      </div>
+                      {/* Products Carousel for this category (Max 9) */}
+                      <ProductCarousel
+                        products={catProducts}
+                        onQuickView={(p) => setSelectedProductForModal(p)}
+                        maxProducts={9}
+                      />
                     </section>
                   );
                 })}
@@ -421,19 +413,8 @@ function StorefrontContent() {
               </div>
             </section>
 
-            {/* Catalog Grid */}
+            {/* Catalog Section Carousel */}
             <section id="catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                <div>
-                  <h2 className="text-2xl font-bold text-stone-900 font-serif">
-                    {selectedCategory === 'All' ? 'All Botanical Essentials' : selectedCategory}
-                  </h2>
-                  <p className="text-xs text-stone-500">
-                    Showing {filteredProducts.length} high-efficacy products
-                  </p>
-                </div>
-              </div>
-
               {filteredProducts.length === 0 ? (
                 <div className="py-16 text-center bg-white rounded-3xl border border-stone-200 space-y-3">
                   <Sparkles className="w-10 h-10 text-stone-300 mx-auto" />
@@ -441,15 +422,13 @@ function StorefrontContent() {
                   <p className="text-xs text-stone-500">Try adjusting your search terms or filters.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {filteredProducts.map(product => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onQuickView={(p) => setSelectedProductForModal(p)}
-                    />
-                  ))}
-                </div>
+                <ProductCarousel
+                  products={filteredProducts}
+                  onQuickView={(p) => setSelectedProductForModal(p)}
+                  maxProducts={9}
+                  title={selectedCategory === 'All' ? 'Botanical Essentials Carousel' : `${selectedCategory} Carousel`}
+                  subtitle={`Showing top 9 items out of ${filteredProducts.length} matching products`}
+                />
               )}
             </section>
 
