@@ -83,3 +83,40 @@ export interface AIRecommendationResult {
   recommendedProductIds: string[];
   routineAdvice: string[];
 }
+
+export interface HeroSlide {
+  id: string;
+  image: string;
+  linkUrl: string; // Category name or URL
+  title?: string;
+  active: boolean;
+}
+
+export interface HeroBannerConfig {
+  headline: string;
+  subheadline: string;
+  badgeText: string;
+  buttonText: string;
+  secondaryButtonText?: string;
+  eyebrowText?: string;
+  pillTagline?: string;
+  bgImage: string;
+  leftImage?: string;
+  rightImage?: string;
+  ctaLinkCategory: string; // 'All' or category name
+  overlayOpacity?: number; // e.g. 0.75
+}
+
+export interface DisplayBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  badge?: string;
+  buttonText: string;
+  categoryLink: string;
+  theme: 'rose' | 'amber' | 'emerald' | 'stone' | 'indigo' | 'dark';
+  position: 'top' | 'middle' | 'bottom';
+  active: boolean;
+}
+

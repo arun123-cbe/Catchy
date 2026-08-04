@@ -70,15 +70,21 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       {/* Header and Nav Controls */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          {title && (
-            <h3 className="text-lg sm:text-xl font-bold font-serif text-stone-900 flex items-center gap-2">
-              <span>{title}</span>
-              <span className="text-[11px] font-sans font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
-                {displayProducts.length} {displayProducts.length === 1 ? 'Product' : 'Products'} (Max {maxProducts})
-              </span>
-            </h3>
+          {title ? (
+            <>
+              <h3 className="text-lg sm:text-xl font-bold font-serif text-stone-900 flex items-center gap-2">
+                <span>{title}</span>
+                <span className="text-[11px] font-sans font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
+                  {displayProducts.length} {displayProducts.length === 1 ? 'Product' : 'Products'}
+                </span>
+              </h3>
+              {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
+            </>
+          ) : (
+            <span className="text-[11px] font-sans font-bold bg-rose-50 border border-rose-200 text-rose-800 px-2.5 py-1 rounded-full">
+              Showing {displayProducts.length} {displayProducts.length === 1 ? 'Item' : 'Items'}
+            </span>
           )}
-          {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
         </div>
 
         {/* Navigation Buttons */}

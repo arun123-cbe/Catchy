@@ -11,10 +11,61 @@ import {
   Link as LinkIcon,
   Edit3,
   X,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { CatchyStoreLogo } from '../CatchyStoreLogo';
+
+// Helper to compress image files using HTML Canvas before base64 conversion
+const compressImageFile = (
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.82
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Selected file is not a valid image.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to load image element'));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export const AdminCategoriesManager: React.FC = () => {
   const {
@@ -40,6 +91,7 @@ export const AdminCategoriesManager: React.FC = () => {
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   // Handle Add Category
   const handleAdd = (e: React.FormEvent) => {
@@ -53,39 +105,37 @@ export const AdminCategoriesManager: React.FC = () => {
   };
 
   // Handle New Category Image File Upload
-  const handleNewCatImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNewCatImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file.');
-      return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const compressed = await compressImageFile(file, 800, 800);
+      setNewCatThumbUrl(compressed);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to process category image.');
+    } finally {
+      setIsUploading(false);
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setNewCatThumbUrl(reader.result as string);
-      setUploadError('');
-    };
-    reader.readAsDataURL(file);
   };
 
   // Handle Edit Category Thumbnail Upload
-  const handleEditCatImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditCatImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file.');
-      return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const compressed = await compressImageFile(file, 800, 800);
+      setEditThumbUrl(compressed);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to process category image.');
+    } finally {
+      setIsUploading(false);
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setEditThumbUrl(reader.result as string);
-      setUploadError('');
-    };
-    reader.readAsDataURL(file);
   };
 
   // Save edited thumbnail
@@ -99,32 +149,22 @@ export const AdminCategoriesManager: React.FC = () => {
   };
 
   // Handle Store Logo File Upload
-  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file (.png, .jpg, .svg, .webp).');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError('Image file size must be less than 5MB.');
-      return;
-    }
-
+    setIsUploading(true);
     setUploadError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setCustomLogoUrl(result);
+    try {
+      const compressed = await compressImageFile(file, 800, 400);
+      setCustomLogoUrl(compressed);
       setSuccessMsg('Logo updated successfully!');
       setTimeout(() => setSuccessMsg(''), 3000);
-    };
-    reader.onerror = () => {
-      setUploadError('Failed to read image file.');
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to process logo image.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleApplyLogoUrl = (e: React.FormEvent) => {

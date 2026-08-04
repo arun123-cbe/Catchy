@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, X, Upload, FileText, Check, Sparkles, Flame, Leaf, Tag, CheckCircle2, Image as ImageIcon, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, Upload, FileText, Check, Sparkles, Flame, Leaf, Tag, CheckCircle2, Image as ImageIcon, Download, CheckSquare, Square, Layers, Percent, ArrowRight, Grid, Table } from 'lucide-react';
 import Papa from 'papaparse';
 import { useStore } from '../../context/StoreContext';
 import { Product } from '../../types';
@@ -10,7 +10,18 @@ const SAMPLE_CSV_CONTENT = `name,tagline,category,price,originalPrice,stock,reor
 "Botanical Scalp Renewal Serum","Nourishing Rosemary & Tea Tree Tonic","Hair & Body",749,999,30,8,"CS-HAIR-303","Revitalizing scalp therapy that strengthens roots and prevents hair fall with active botanical extracts.","Strengthens roots;Reduces scalp itch;Promotes hair growth","Rosemary Leaf Oil;Tea Tree Oil;Biotin;Peppermint Extract","Paraben-Free;Sulfate-Free;Organic",false,true,true,false,"Hair Loss;Scalp Dryness","https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=800"`;
 
 export const AdminProducts: React.FC = () => {
-  const { products, categories, addProduct, bulkAddProducts, updateProduct, deleteProduct, formatPrice } = useStore();
+  const {
+    products,
+    categories,
+    addProduct,
+    bulkAddProducts,
+    updateProduct,
+    deleteProduct,
+    formatPrice,
+    bulkUpdateProducts,
+    bulkDeleteProducts,
+    bulkUpdateCategoryForProducts
+  } = useStore();
 
   const [search, setSearch] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | 'All'>('All');
@@ -18,12 +29,23 @@ export const AdminProducts: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
+  // Bulk Edit Selection State
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkCategoryChoice, setBulkCategoryChoice] = useState<string>('');
+  const [bulkPriceChange, setBulkPriceChange] = useState<string>('');
+  const [bulkStockChange, setBulkStockChange] = useState<string>('');
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string>('');
+
+  // View mode: Standard Table vs Batch Grid
+  const [viewMode, setViewMode] = useState<'table' | 'batchGrid'>('table');
+
   // CSV / Excel Bulk Upload State
   const [bulkImportMode, setBulkImportMode] = useState<'file' | 'paste'>('file');
   const [pastedText, setPastedText] = useState('');
   const [csvPreview, setCsvPreview] = useState<Omit<Product, 'id'>[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
   const [csvError, setCsvError] = useState('');
+
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState<Omit<Product, 'id'>>({
@@ -59,17 +81,54 @@ export const AdminProducts: React.FC = () => {
     return matchesCat && matchesSearch;
   });
 
-  // Handle local image file upload (converts to base64 Data URL)
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Helper to compress product images using Canvas
+  const compressProductImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxWidth = 1000;
+          const maxHeight = 1000;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle local image file upload (converts to optimized base64 Data URL)
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setFormData(prev => ({ ...prev, image: reader.result as string }));
-        }
-      };
-      reader.readAsDataURL(file);
+      const compressed = await compressProductImage(file);
+      if (compressed) {
+        setFormData(prev => ({ ...prev, image: compressed }));
+      }
     }
   };
 
@@ -233,6 +292,106 @@ export const AdminProducts: React.FC = () => {
     setCsvError('');
   };
 
+  // --- BULK ACTION HANDLERS ---
+  const isAllFilteredSelected = filtered.length > 0 && filtered.every(p => selectedProductIds.includes(p.id));
+
+  const toggleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      setSelectedProductIds(prev => prev.filter(id => !filtered.some(f => f.id === id)));
+    } else {
+      const filteredIds = filtered.map(p => p.id);
+      setSelectedProductIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const toggleSelectProduct = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  // Bulk Apply Category
+  const handleApplyBulkCategory = () => {
+    if (!bulkCategoryChoice || selectedProductIds.length === 0) return;
+    bulkUpdateCategoryForProducts(selectedProductIds, bulkCategoryChoice);
+    setBulkSuccessMsg(`Updated category to "${bulkCategoryChoice}" for ${selectedProductIds.length} products!`);
+    setTimeout(() => setBulkSuccessMsg(''), 3000);
+  };
+
+  // Bulk Apply Price Adjustment
+  const handleApplyBulkPrice = () => {
+    if (!bulkPriceChange || selectedProductIds.length === 0) return;
+    const num = parseFloat(bulkPriceChange);
+    if (isNaN(num)) return;
+
+    const selectedProds = products.filter(p => selectedProductIds.includes(p.id));
+    selectedProds.forEach(prod => {
+      let newPrice = prod.price;
+      if (bulkPriceChange.startsWith('+')) {
+        newPrice = Math.round(prod.price * (1 + Math.abs(num) / 100));
+      } else if (bulkPriceChange.startsWith('-')) {
+        newPrice = Math.round(prod.price * (1 - Math.abs(num) / 100));
+      } else {
+        newPrice = Math.round(num);
+      }
+      updateProduct({
+        ...prod,
+        price: Math.max(1, newPrice),
+        originalPrice: prod.originalPrice || prod.price
+      });
+    });
+
+    setBulkSuccessMsg(`Updated price for ${selectedProductIds.length} products!`);
+    setBulkPriceChange('');
+    setTimeout(() => setBulkSuccessMsg(''), 3000);
+  };
+
+  // Bulk Apply Stock
+  const handleApplyBulkStock = () => {
+    if (!bulkStockChange || selectedProductIds.length === 0) return;
+    const num = parseInt(bulkStockChange);
+    if (isNaN(num)) return;
+
+    selectedProductIds.forEach(id => {
+      const prod = products.find(p => p.id === id);
+      if (prod) {
+        let newStock = prod.stock;
+        if (bulkStockChange.startsWith('+')) {
+          newStock = prod.stock + Math.abs(num);
+        } else if (bulkStockChange.startsWith('-')) {
+          newStock = Math.max(0, prod.stock - Math.abs(num));
+        } else {
+          newStock = Math.max(0, num);
+        }
+        updateProduct({ ...prod, stock: newStock });
+      }
+    });
+
+    setBulkSuccessMsg(`Updated stock levels for ${selectedProductIds.length} products!`);
+    setBulkStockChange('');
+    setTimeout(() => setBulkSuccessMsg(''), 3000);
+  };
+
+  // Bulk Badge Update
+  const handleApplyBulkBadge = (badgeField: 'isBestSeller' | 'isNewArrival' | 'isOrganic' | 'isSuperSaver', value: boolean) => {
+    if (selectedProductIds.length === 0) return;
+    bulkUpdateProducts(selectedProductIds, { [badgeField]: value });
+    setBulkSuccessMsg(`Updated ${badgeField} flag for ${selectedProductIds.length} items!`);
+    setTimeout(() => setBulkSuccessMsg(''), 3000);
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = () => {
+    if (selectedProductIds.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedProductIds.length} selected products? This action cannot be undone.`)) {
+      bulkDeleteProducts(selectedProductIds);
+      setSelectedProductIds([]);
+      setBulkSuccessMsg(`Deleted selected products.`);
+      setTimeout(() => setBulkSuccessMsg(''), 3000);
+    }
+  };
+
+
   const handleConfirmBulkUpload = () => {
     if (csvPreview.length > 0) {
       bulkAddProducts(csvPreview);
@@ -250,17 +409,39 @@ export const AdminProducts: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-stone-900 font-serif">Product Catalog Management</h2>
-          <p className="text-xs text-stone-500">Add products, upload pictures, set specialities & tags, or bulk import via CSV/Excel</p>
+          <p className="text-xs text-stone-500">Add products, bulk edit categories & prices, set specialities, or bulk import via CSV/Excel</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="bg-stone-100 p-1 rounded-xl flex items-center border border-stone-200">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'table' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>Standard Table</span>
+            </button>
+            <button
+              onClick={() => setViewMode('batchGrid')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'batchGrid' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Grid className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Batch Grid Editor</span>
+            </button>
+          </div>
+
           <button
             onClick={handleDownloadTemplate}
             className="px-3.5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border border-stone-200"
             title="Download CSV / Excel Sample Template File"
           >
             <Download className="w-4 h-4 text-emerald-600" />
-            <span>Download CSV Sheet Template</span>
+            <span>CSV Sheet Template</span>
           </button>
 
           <button
@@ -268,7 +449,7 @@ export const AdminProducts: React.FC = () => {
             className="px-4 py-2.5 bg-emerald-800 text-white rounded-xl text-xs font-bold hover:bg-emerald-900 transition-all flex items-center gap-1.5 shadow-md shrink-0"
           >
             <Upload className="w-4 h-4 text-emerald-300" />
-            Bulk CSV / Excel Upload
+            Bulk CSV Upload
           </button>
 
           <button
@@ -280,6 +461,14 @@ export const AdminProducts: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Bulk Operation Success Notification */}
+      {bulkSuccessMsg && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{bulkSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-4 rounded-2xl border border-stone-200">
@@ -309,93 +498,377 @@ export const AdminProducts: React.FC = () => {
         </div>
       </div>
 
-      {/* Products Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-600">
-            <thead className="bg-stone-50 border-b border-stone-200 uppercase tracking-wider text-[10px] text-stone-500 font-bold">
-              <tr>
-                <th className="p-4">Product</th>
-                <th className="p-4">SKU & Category</th>
-                <th className="p-4">Price (₹)</th>
-                <th className="p-4">Specialities & Tags</th>
-                <th className="p-4">Stock</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
+      {/* DYNAMIC BULK ACTIONS TOOLBAR (Appears when products are selected) */}
+      {selectedProductIds.length > 0 && (
+        <div className="bg-stone-900 text-white p-4 rounded-2xl border border-stone-800 shadow-xl space-y-3 animate-fade-in">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-stone-800 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-amber-400 text-stone-950 text-xs font-extrabold flex items-center justify-center">
+                {selectedProductIds.length}
+              </span>
+              <span className="text-xs font-bold text-stone-200 font-serif">
+                Products Selected for Bulk Action
+              </span>
+            </div>
 
-            <tbody className="divide-y divide-stone-100 font-medium">
-              {filtered.map((prod) => (
-                <tr key={prod.id} className="hover:bg-stone-50/80 transition-colors">
-                  
-                  <td className="p-4 flex items-center gap-3">
-                    <img src={prod.image} alt={prod.name} className="w-12 h-12 rounded-xl object-cover bg-stone-100 border border-stone-200" />
-                    <div>
-                      <span className="font-bold text-stone-900 font-serif block">{prod.name}</span>
-                      <span className="text-[10px] text-stone-400 line-clamp-1">{prod.tagline}</span>
-                    </div>
-                  </td>
+            <button
+              onClick={() => setSelectedProductIds([])}
+              className="text-[11px] text-stone-400 hover:text-stone-200 underline text-left"
+            >
+              Clear Selection
+            </button>
+          </div>
 
-                  <td className="p-4">
-                    <span className="font-mono text-stone-500 font-bold block">{prod.sku}</span>
-                    <span className="text-[10px] text-stone-400">{prod.category}</span>
-                  </td>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Bulk Action 1: Reassign Category */}
+            <div className="bg-stone-800/80 p-3 rounded-xl space-y-2 border border-stone-700">
+              <span className="text-[10px] uppercase font-bold text-amber-300 block">1. Bulk Category Assignment</span>
+              <div className="flex gap-2">
+                <select
+                  value={bulkCategoryChoice}
+                  onChange={(e) => setBulkCategoryChoice(e.target.value)}
+                  className="flex-1 bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                >
+                  <option value="">Select Category...</option>
+                  {categories.map(c => (
+                    <option key={`bulk-cat-opt-${c}`} value={c}>{c}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleApplyBulkCategory}
+                  disabled={!bulkCategoryChoice}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-stone-950 font-bold rounded-lg transition-all shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
 
-                  <td className="p-4 font-bold text-stone-900">
-                    {formatPrice(prod.price)}
-                  </td>
+            {/* Bulk Action 2: Price Adjustment */}
+            <div className="bg-stone-800/80 p-3 rounded-xl space-y-2 border border-stone-700">
+              <span className="text-[10px] uppercase font-bold text-rose-300 block">2. Bulk Price Adjustment</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. -10% or +15% or 999"
+                  value={bulkPriceChange}
+                  onChange={(e) => setBulkPriceChange(e.target.value)}
+                  className="flex-1 bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyBulkPrice}
+                  disabled={!bulkPriceChange}
+                  className="px-3 py-1.5 bg-rose-500 hover:bg-rose-400 disabled:opacity-40 text-white font-bold rounded-lg transition-all shrink-0"
+                >
+                  Update Price
+                </button>
+              </div>
+            </div>
 
-                  <td className="p-4">
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {prod.isBestSeller && (
-                        <span className="bg-amber-100 text-amber-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                          <Flame className="w-2.5 h-2.5 text-amber-600 fill-amber-600" /> Best Seller
-                        </span>
-                      )}
-                      {prod.isSuperSaver && (
-                        <span className="bg-rose-100 text-rose-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                          <Tag className="w-2.5 h-2.5 text-rose-600" /> Super Saver
-                        </span>
-                      )}
-                      {(prod.specialities || []).slice(0, 2).map((s, i) => (
-                        <span key={i} className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
+            {/* Bulk Action 3: Stock Management */}
+            <div className="bg-stone-800/80 p-3 rounded-xl space-y-2 border border-stone-700">
+              <span className="text-[10px] uppercase font-bold text-emerald-300 block">3. Bulk Stock Inventory</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. +20 or 50"
+                  value={bulkStockChange}
+                  onChange={(e) => setBulkStockChange(e.target.value)}
+                  className="flex-1 bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyBulkStock}
+                  disabled={!bulkStockChange}
+                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-stone-950 font-bold rounded-lg transition-all shrink-0"
+                >
+                  Set Stock
+                </button>
+              </div>
+            </div>
+          </div>
 
-                  <td className="p-4 font-bold text-stone-800">
-                    {prod.stock} units
-                  </td>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-800">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold text-stone-400 uppercase">Set Badges:</span>
+              <button
+                onClick={() => handleApplyBulkBadge('isBestSeller', true)}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-500/30"
+              >
+                + Best Seller
+              </button>
+              <button
+                onClick={() => handleApplyBulkBadge('isNewArrival', true)}
+                className="px-2.5 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-bold border border-indigo-500/30"
+              >
+                + New Arrival
+              </button>
+              <button
+                onClick={() => handleApplyBulkBadge('isOrganic', true)}
+                className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[10px] font-bold border border-emerald-500/30"
+              >
+                + 100% Organic
+              </button>
+            </div>
 
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleOpenEdit(prod)}
-                        className="p-2 rounded-lg hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-colors"
-                        title="Edit Product"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete ${prod.name}?`)) deleteProduct(prod.id);
-                        }}
-                        className="p-2 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition-colors"
-                        title="Delete Product"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <button
+              onClick={handleBulkDelete}
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete {selectedProductIds.length} Products
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* PRODUCTS DISPLAY: STANDARD TABLE OR BATCH GRID */}
+      {viewMode === 'table' ? (
+        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-stone-600">
+              <thead className="bg-stone-50 border-b border-stone-200 uppercase tracking-wider text-[10px] text-stone-500 font-bold">
+                <tr>
+                  <th className="p-4 w-10">
+                    <button
+                      onClick={toggleSelectAllFiltered}
+                      className="p-1 rounded text-stone-500 hover:text-stone-900"
+                      title="Select / Deselect All Filtered"
+                    >
+                      {isAllFilteredSelected ? (
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Square className="w-4 h-4 text-stone-400" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="p-4">Product</th>
+                  <th className="p-4">SKU & Category</th>
+                  <th className="p-4">Price (₹)</th>
+                  <th className="p-4">Specialities & Tags</th>
+                  <th className="p-4">Stock</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-stone-100 font-medium">
+                {filtered.map((prod) => {
+                  const isSelected = selectedProductIds.includes(prod.id);
+                  return (
+                    <tr
+                      key={prod.id}
+                      className={`hover:bg-stone-50/80 transition-colors ${
+                        isSelected ? 'bg-amber-50/50' : ''
+                      }`}
+                    >
+                      <td className="p-4">
+                        <button
+                          onClick={() => toggleSelectProduct(prod.id)}
+                          className="p-1 rounded text-stone-500 hover:text-stone-900"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-stone-300" />
+                          )}
+                        </button>
+                      </td>
+
+                      <td className="p-4 flex items-center gap-3">
+                        <img src={prod.image} alt={prod.name} className="w-12 h-12 rounded-xl object-cover bg-stone-100 border border-stone-200" />
+                        <div>
+                          <span className="font-bold text-stone-900 font-serif block">{prod.name}</span>
+                          <span className="text-[10px] text-stone-400 line-clamp-1">{prod.tagline}</span>
+                        </div>
+                      </td>
+
+                      <td className="p-4">
+                        <span className="font-mono text-stone-500 font-bold block">{prod.sku}</span>
+                        <span className="text-[10px] text-stone-700 bg-stone-100 px-2 py-0.5 rounded-md font-bold">{prod.category}</span>
+                      </td>
+
+                      <td className="p-4 font-bold text-stone-900">
+                        {formatPrice(prod.price)}
+                      </td>
+
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {prod.isBestSeller && (
+                            <span className="bg-amber-100 text-amber-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Flame className="w-2.5 h-2.5 text-amber-600 fill-amber-600" /> Best Seller
+                            </span>
+                          )}
+                          {prod.isSuperSaver && (
+                            <span className="bg-rose-100 text-rose-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Tag className="w-2.5 h-2.5 text-rose-600" /> Super Saver
+                            </span>
+                          )}
+                          {(prod.specialities || []).slice(0, 2).map((s, i) => (
+                            <span key={i} className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      <td className="p-4 font-bold text-stone-800">
+                        {prod.stock} units
+                      </td>
+
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEdit(prod)}
+                            className="p-2 rounded-lg hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-colors"
+                            title="Edit Product"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete "${prod.name}"?`)) {
+                                deleteProduct(prod.id);
+                              }
+                            }}
+                            className="p-2 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition-colors"
+                            title="Delete Product"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* BATCH GRID SPREADSHEET EDITOR MODE */
+        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden p-4 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold font-serif text-stone-900 flex items-center gap-2">
+                <Grid className="w-4 h-4 text-indigo-600" />
+                Interactive Batch Product Grid Editor
+              </h3>
+              <p className="text-[11px] text-stone-500">Edit titles, categories, prices, and stock levels directly inside inputs below</p>
+            </div>
+            <span className="text-xs font-bold text-stone-400">{filtered.length} products shown</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-stone-50 border-b border-stone-200 text-[10px] text-stone-500 uppercase font-bold">
+                <tr>
+                  <th className="p-3">Product Name</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Price (₹)</th>
+                  <th className="p-3">Original Price (₹)</th>
+                  <th className="p-3">Stock</th>
+                  <th className="p-3">Bestseller</th>
+                  <th className="p-3 text-right">Quick Save</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filtered.map((prod) => (
+                  <tr key={`batch-grid-${prod.id}`} className="hover:bg-stone-50/50">
+                    <td className="p-2 min-w-[200px]">
+                      <input
+                        type="text"
+                        defaultValue={prod.name}
+                        onBlur={(e) => {
+                          if (e.target.value.trim() && e.target.value !== prod.name) {
+                            updateProduct({ ...prod, name: e.target.value.trim() });
+                          }
+                        }}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-900 font-bold focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </td>
+
+                    <td className="p-2 min-w-[160px]">
+                      <select
+                        defaultValue={prod.category}
+                        onChange={(e) => {
+                          updateProduct({ ...prod, category: e.target.value });
+                        }}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-medium focus:bg-white"
+                      >
+                        {categories.map(c => (
+                          <option key={`grid-cat-${c}`} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td className="p-2 w-28">
+                      <input
+                        type="number"
+                        defaultValue={prod.price}
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0 && val !== prod.price) {
+                            updateProduct({ ...prod, price: val });
+                          }
+                        }}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-900 font-mono font-bold"
+                      />
+                    </td>
+
+                    <td className="p-2 w-28">
+                      <input
+                        type="number"
+                        defaultValue={prod.originalPrice || ''}
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val)) {
+                            updateProduct({ ...prod, originalPrice: val });
+                          }
+                        }}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-500 font-mono"
+                      />
+                    </td>
+
+                    <td className="p-2 w-24">
+                      <input
+                        type="number"
+                        defaultValue={prod.stock}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val) && val >= 0 && val !== prod.stock) {
+                            updateProduct({ ...prod, stock: val });
+                          }
+                        }}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-bold"
+                      />
+                    </td>
+
+                    <td className="p-2 text-center w-20">
+                      <input
+                        type="checkbox"
+                        defaultChecked={prod.isBestSeller}
+                        onChange={(e) => {
+                          updateProduct({ ...prod, isBestSeller: e.target.checked });
+                        }}
+                        className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                      />
+                    </td>
+
+                    <td className="p-2 text-right">
+                      <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-end gap-1">
+                        <Check className="w-3 h-3" /> Auto Saved
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
 
       {/* SINGLE PRODUCT ADD / EDIT MODAL */}
       {isAddModalOpen && (

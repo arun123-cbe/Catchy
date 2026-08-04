@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, CartItem, Order, OrderStatus } from '../types';
+import { Product, CartItem, Order, OrderStatus, HeroBannerConfig, DisplayBanner, HeroSlide } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_ORDERS } from '../data/initialData';
 
 interface StoreContextType {
@@ -20,8 +20,8 @@ interface StoreContextType {
   setSearchQuery: (q: string) => void;
   activeView: 'store' | 'quiz' | 'admin';
   setActiveView: (view: 'store' | 'quiz' | 'admin') => void;
-  adminSubTab: 'analytics' | 'inventory' | 'products' | 'categories' | 'orders';
-  setAdminSubTab: (tab: 'analytics' | 'inventory' | 'products' | 'categories' | 'orders') => void;
+  adminSubTab: 'analytics' | 'inventory' | 'products' | 'categories' | 'orders' | 'banners';
+  setAdminSubTab: (tab: 'analytics' | 'inventory' | 'products' | 'categories' | 'orders' | 'banners') => void;
   formatPrice: (amountInINR: number) => string;
   
   // Cart Actions
@@ -43,6 +43,27 @@ interface StoreContextType {
   deleteProduct: (productId: string) => void;
   updateStock: (productId: string, newStock: number) => void;
   
+  // Bulk Product Operations
+  bulkUpdateProducts: (ids: string[], updates: Partial<Product>) => void;
+  bulkDeleteProducts: (ids: string[]) => void;
+  bulkUpdateCategoryForProducts: (ids: string[], categoryName: string) => void;
+
+  // Hero Banner Slides (Uploaded Images & Links)
+  heroSlides: HeroSlide[];
+  addHeroSlide: (slide: Omit<HeroSlide, 'id'>) => HeroSlide;
+  updateHeroSlide: (id: string, slideData: Partial<HeroSlide>) => void;
+  deleteHeroSlide: (id: string) => void;
+  toggleHeroSlide: (id: string) => void;
+
+  // Homepage Hero Banner & Display Banners Config
+  heroBannerConfig: HeroBannerConfig;
+  updateHeroBannerConfig: (partialConfig: Partial<HeroBannerConfig>) => void;
+  homepageBanners: DisplayBanner[];
+  addHomepageBanner: (banner: Omit<DisplayBanner, 'id'>) => DisplayBanner;
+  updateHomepageBanner: (id: string, bannerData: Partial<DisplayBanner>) => void;
+  deleteHomepageBanner: (id: string) => void;
+  toggleHomepageBanner: (id: string) => void;
+
   // Quick Concern Filter
   selectedConcern: string;
   setSelectedConcern: (concern: string) => void;
@@ -57,6 +78,85 @@ interface StoreContextType {
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
+
+export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'hero-1',
+    image: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1600',
+    linkUrl: 'Beauty & Skincare',
+    title: 'Radiant Skin Rituals',
+    active: true
+  },
+  {
+    id: 'hero-2',
+    image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=1600',
+    linkUrl: 'Hair & Body',
+    title: 'Pure Bio-Active Formulations',
+    active: true
+  },
+  {
+    id: 'hero-3',
+    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=1600',
+    linkUrl: 'Health & Supplements',
+    title: 'Sun Protection & Daily Glow',
+    active: true
+  }
+];
+
+export const DEFAULT_HERO_BANNER: HeroBannerConfig = {
+  headline: 'DISCOVER Healthy, Glowing Skin',
+  subheadline: 'Premium Skincare for Every You',
+  eyebrowText: 'RADIANT SKIN. EVERY DAY.',
+  pillTagline: 'CLEAN INGREDIENTS • VISIBLE RESULTS • MADE FOR YOU',
+  badgeText: 'Pure Bio-Active Health & Beauty Formulas',
+  buttonText: 'SHOP NOW',
+  secondaryButtonText: 'Take AI Skin Consultation',
+  bgImage: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1600',
+  leftImage: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1200',
+  rightImage: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1200',
+  ctaLinkCategory: 'All',
+  overlayOpacity: 0.75
+};
+
+export const DEFAULT_DISPLAY_BANNERS: DisplayBanner[] = [
+  {
+    id: 'banner-1',
+    title: 'Monsoon Radiance & Scalp Elixir Trio',
+    subtitle: 'Save 30% on our award-winning cold-pressed rosemary & bio-active tea tree serum.',
+    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1200',
+    badge: 'Seasonal Super Saver',
+    buttonText: 'Shop Hair & Body',
+    categoryLink: 'Hair & Body',
+    theme: 'rose',
+    position: 'top',
+    active: true
+  },
+  {
+    id: 'banner-2',
+    title: 'Ancient Ayurvedic Immunity & Adaptogen Blends',
+    subtitle: 'KSM-66 Ashwagandha & Bio-Enriched Holy Basil for deep mental balance and energy.',
+    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=1200',
+    badge: '100% Organic Certified',
+    buttonText: 'Explore Health & Supplements',
+    categoryLink: 'Health & Supplements',
+    theme: 'emerald',
+    position: 'middle',
+    active: true
+  },
+  {
+    id: 'banner-3',
+    title: 'Luxury Pure Botanical Skincare Rituals',
+    subtitle: 'Dermatologist tested Vitamin C serum and multi-peptide glow concentrates.',
+    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=1200',
+    badge: 'Bestseller Formula',
+    buttonText: 'Shop Beauty & Skincare',
+    categoryLink: 'Beauty & Skincare',
+    theme: 'amber',
+    position: 'bottom',
+    active: true
+  }
+];
+
 
 export const DEFAULT_CATEGORY_THUMBNAILS: Record<string, string> = {
   'Beauty & Skincare': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
@@ -92,7 +192,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Load initial state from LocalStorage or defaults
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('auraglow_products_v2');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PRODUCTS;
+      } catch (e) {
+        return INITIAL_PRODUCTS;
+      }
+    }
+    return INITIAL_PRODUCTS;
   });
 
   const [categoryThumbnails, setCategoryThumbnails] = useState<Record<string, string>>(() => {
@@ -114,7 +222,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        // Merge to guarantee at least default categories are available
         const merged = Array.from(new Set([...parsed, ...DEFAULT_CATEGORIES]));
         return merged;
       }
@@ -126,12 +233,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('auraglow_cart_v2');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('auraglow_orders_v2');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : INITIAL_ORDERS;
+      } catch (e) {
+        return INITIAL_ORDERS;
+      }
+    }
+    return INITIAL_ORDERS;
   });
 
   const [selectedCategory, setSelectedCategory] = useState<string | 'All'>('All');
@@ -139,40 +262,152 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedConcern, setSelectedConcern] = useState('');
   const [activeView, setActiveView] = useState<'store' | 'quiz' | 'admin'>('store');
-  const [adminSubTab, setAdminSubTab] = useState<'analytics' | 'inventory' | 'products' | 'categories' | 'orders'>('analytics');
+  const [adminSubTab, setAdminSubTab] = useState<'analytics' | 'inventory' | 'products' | 'categories' | 'orders' | 'banners'>('analytics');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
+
+  // Hero Banner Slides State
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(() => {
+    const saved = localStorage.getItem('auraglow_hero_slides');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return DEFAULT_HERO_SLIDES;
+      }
+    }
+    return DEFAULT_HERO_SLIDES;
+  });
+
+  // Sync Hero Slides to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('auraglow_hero_slides', JSON.stringify(heroSlides));
+    } catch (e) {
+      console.warn('Could not save hero slides to localStorage:', e);
+    }
+  }, [heroSlides]);
+
+  const addHeroSlide = (slide: Omit<HeroSlide, 'id'>): HeroSlide => {
+    const created: HeroSlide = {
+      ...slide,
+      id: `hero-${Date.now()}`
+    };
+    setHeroSlides(prev => [created, ...prev]);
+    return created;
+  };
+
+  const updateHeroSlide = (id: string, slideData: Partial<HeroSlide>) => {
+    setHeroSlides(prev => prev.map(s => (s.id === id ? { ...s, ...slideData } : s)));
+  };
+
+  const deleteHeroSlide = (id: string) => {
+    setHeroSlides(prev => prev.filter(s => s.id !== id));
+  };
+
+  const toggleHeroSlide = (id: string) => {
+    setHeroSlides(prev => prev.map(s => (s.id === id ? { ...s, active: !s.active } : s)));
+  };
+
+  // Hero Banner Config State
+  const [heroBannerConfig, setHeroBannerConfig] = useState<HeroBannerConfig>(() => {
+    const saved = localStorage.getItem('auraglow_hero_banner');
+    if (saved) {
+      try {
+        return { ...DEFAULT_HERO_BANNER, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_HERO_BANNER;
+      }
+    }
+    return DEFAULT_HERO_BANNER;
+  });
+
+  // Display Banners List State
+  const [homepageBanners, setHomepageBanners] = useState<DisplayBanner[]>(() => {
+    const saved = localStorage.getItem('auraglow_homepage_banners');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return DEFAULT_DISPLAY_BANNERS;
+      }
+    }
+    return DEFAULT_DISPLAY_BANNERS;
+  });
 
   const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(() => {
     return localStorage.getItem('catchystore_custom_logo') || null;
   });
 
+  // Sync Hero Banner to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('auraglow_hero_banner', JSON.stringify(heroBannerConfig));
+    } catch (e) {
+      console.warn('Could not save hero banner to localStorage:', e);
+    }
+  }, [heroBannerConfig]);
+
+  // Sync Display Banners to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('auraglow_homepage_banners', JSON.stringify(homepageBanners));
+    } catch (e) {
+      console.warn('Could not save homepage banners to localStorage:', e);
+    }
+  }, [homepageBanners]);
+
   // Sync to LocalStorage
   useEffect(() => {
-    if (customLogoUrl) {
-      localStorage.setItem('catchystore_custom_logo', customLogoUrl);
-    } else {
-      localStorage.removeItem('catchystore_custom_logo');
+    try {
+      if (customLogoUrl) {
+        localStorage.setItem('catchystore_custom_logo', customLogoUrl);
+      } else {
+        localStorage.removeItem('catchystore_custom_logo');
+      }
+    } catch (e) {
+      console.warn('Could not save custom logo to localStorage:', e);
     }
   }, [customLogoUrl]);
+
   useEffect(() => {
-    localStorage.setItem('auraglow_products_v2', JSON.stringify(products));
+    try {
+      localStorage.setItem('auraglow_products_v2', JSON.stringify(products));
+    } catch (e) {
+      console.warn('Could not save products to localStorage:', e);
+    }
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('auraglow_categories', JSON.stringify(categories));
+    try {
+      localStorage.setItem('auraglow_categories', JSON.stringify(categories));
+    } catch (e) {
+      console.warn('Could not save categories to localStorage:', e);
+    }
   }, [categories]);
 
   useEffect(() => {
-    localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
+    try {
+      localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
+    } catch (e) {
+      console.warn('Could not save category thumbnails to localStorage:', e);
+    }
   }, [categoryThumbnails]);
 
   useEffect(() => {
-    localStorage.setItem('auraglow_cart_v2', JSON.stringify(cart));
+    try {
+      localStorage.setItem('auraglow_cart_v2', JSON.stringify(cart));
+    } catch (e) {
+      console.warn('Could not save cart to localStorage:', e);
+    }
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
+    try {
+      localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
+    } catch (e) {
+      console.warn('Could not save orders to localStorage:', e);
+    }
   }, [orders]);
 
   const updateCategoryThumbnail = (catName: string, url: string) => {
@@ -322,6 +557,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p));
   };
 
+  // Bulk Product Operations
+  const bulkUpdateProducts = (ids: string[], updates: Partial<Product>) => {
+    if (!ids || ids.length === 0) return;
+    setProducts(prev =>
+      prev.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p))
+    );
+  };
+
+  const bulkDeleteProducts = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setProducts(prev => prev.filter(p => !ids.includes(p.id)));
+  };
+
+  const bulkUpdateCategoryForProducts = (ids: string[], categoryName: string) => {
+    if (!ids || ids.length === 0 || !categoryName) return;
+    // Ensure category exists
+    if (!categories.includes(categoryName)) {
+      setCategories(prev => [...prev, categoryName]);
+    }
+    setProducts(prev =>
+      prev.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p))
+    );
+  };
+
+  // Banner Actions
+  const updateHeroBannerConfig = (partialConfig: Partial<HeroBannerConfig>) => {
+    setHeroBannerConfig(prev => ({ ...prev, ...partialConfig }));
+  };
+
+  const addHomepageBanner = (bannerData: Omit<DisplayBanner, 'id'>): DisplayBanner => {
+    const created: DisplayBanner = {
+      ...bannerData,
+      id: `banner-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+    };
+    setHomepageBanners(prev => [...prev, created]);
+    return created;
+  };
+
+  const updateHomepageBanner = (id: string, bannerData: Partial<DisplayBanner>) => {
+    setHomepageBanners(prev =>
+      prev.map(b => (b.id === id ? { ...b, ...bannerData } : b))
+    );
+  };
+
+  const deleteHomepageBanner = (id: string) => {
+    setHomepageBanners(prev => prev.filter(b => b.id !== id));
+  };
+
+  const toggleHomepageBanner = (id: string) => {
+    setHomepageBanners(prev =>
+      prev.map(b => (b.id === id ? { ...b, active: !b.active } : b))
+    );
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -358,6 +647,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateProduct,
         deleteProduct,
         updateStock,
+        bulkUpdateProducts,
+        bulkDeleteProducts,
+        bulkUpdateCategoryForProducts,
+        heroSlides,
+        addHeroSlide,
+        updateHeroSlide,
+        deleteHeroSlide,
+        toggleHeroSlide,
+        heroBannerConfig,
+        updateHeroBannerConfig,
+        homepageBanners,
+        addHomepageBanner,
+        updateHomepageBanner,
+        deleteHomepageBanner,
+        toggleHomepageBanner,
         selectedConcern,
         setSelectedConcern,
         customLogoUrl,
@@ -369,6 +673,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {children}
     </StoreContext.Provider>
   );
+
 };
 
 export const useStore = () => {

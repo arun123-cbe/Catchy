@@ -13,8 +13,9 @@ import { CategoryPage } from './components/CategoryPage';
 import { SubscriptionsManager } from './components/SubscriptionsManager';
 import { AdminPortal } from './components/AdminPortal';
 import { ProductCarousel } from './components/ProductCarousel';
+import { WideSkincareHeroBanner } from './components/WideSkincareHeroBanner';
 import { Product, Order } from './types';
-import { Sparkles, RefreshCw, ShieldCheck, Heart, ArrowRight, Star, Leaf, CheckCircle2, QrCode, Lock, Zap, Grid, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, RefreshCw, ShieldCheck, Heart, ArrowRight, Star, Leaf, CheckCircle2, QrCode, Lock, Zap, Grid, ChevronDown, ChevronUp, Flame, Tag, ThumbsUp, Award, Truck } from 'lucide-react';
 
 const CATEGORY_THUMBNAILS: Record<string, string> = {
   'Beauty & Skincare': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
@@ -54,16 +55,36 @@ function StorefrontContent() {
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState('');
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string>('All');
+
+  const priceRanges = [
+    { id: 'All', label: 'All Prices', subtext: 'Explore full catalog' },
+    { id: 'under-499', label: 'Under ₹499', subtext: 'Budget & trial essentials' },
+    { id: '500-999', label: '₹500 - ₹999', subtext: 'Everyday skin & glow basics' },
+    { id: '1000-1999', label: '₹1,000 - ₹1,999', subtext: 'Clinical-grade formulations' },
+    { id: '2000-plus', label: '₹2,000 & Above', subtext: 'Luxury adaptogenic sets' },
+  ];
+
+  const getPriceFilteredProducts = () => {
+    const safeProds = (products || []).filter(Boolean);
+    if (selectedPriceRange === 'under-499') return safeProds.filter(p => p.price < 500);
+    if (selectedPriceRange === '500-999') return safeProds.filter(p => p.price >= 500 && p.price <= 999);
+    if (selectedPriceRange === '1000-1999') return safeProds.filter(p => p.price >= 1000 && p.price <= 1999);
+    if (selectedPriceRange === '2000-plus') return safeProds.filter(p => p.price >= 2000);
+    return safeProds;
+  };
 
   // Filter products by category, search query, and concern
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = (products || []).filter(p => {
+    if (!p) return false;
     const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.ingredients && p.ingredients.some(i => i.toLowerCase().includes(searchQuery.toLowerCase())));
-    const matchesConcern = !selectedConcern || p.concernsHandled.includes(selectedConcern);
+    const q = (searchQuery || '').toLowerCase();
+    const matchesSearch = !q ||
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.tagline || '').toLowerCase().includes(q) ||
+      (Array.isArray(p.ingredients) && p.ingredients.some(i => i && i.toLowerCase().includes(q)));
+    const matchesConcern = !selectedConcern || selectedConcern === 'All' || (Array.isArray(p.concernsHandled) && p.concernsHandled.includes(selectedConcern));
 
     return matchesCategory && matchesSearch && matchesConcern;
   });
@@ -89,93 +110,14 @@ function StorefrontContent() {
           selectedCategory !== 'All' ? (
             <CategoryPage />
           ) : (
-          <div className="space-y-10">
+          <div className="space-y-12 pb-8">
             
-            {/* Hero Section */}
-            <section className="relative overflow-hidden bg-gradient-to-r from-stone-900 via-stone-850 to-rose-950 text-white py-12 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-stone-800">
-              <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                
-                <div className="space-y-5">
-                  <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 px-3.5 py-1.5 rounded-full text-xs font-bold text-amber-300 backdrop-blur-md">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
-                    <span>Pure Bio-Active Health & Beauty Formulas</span>
-                  </div>
+            {/* 1. HOME BANNER (HERO SLIDER) */}
+            <WideSkincareHeroBanner onOpenQuiz={() => setIsQuizOpen(true)} />
 
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold font-serif leading-tight tracking-tight text-white">
-                    Radiance, Reimagined <br />
-                    <span className="bg-gradient-to-r from-amber-200 via-rose-300 to-emerald-200 bg-clip-text text-transparent">
-                      For Mind, Body & Glow
-                    </span>
-                  </h1>
-
-                  <p className="text-xs sm:text-sm text-stone-300 max-w-lg leading-relaxed font-sans">
-                    Clinical-grade adaptogens, clean organic skincare, and luxury wellness essentials. Fast doorstep delivery across India with secure UPI payment gateway.
-                  </p>
-
-                  {/* Hero Action Buttons */}
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button
-                      onClick={() => setIsQuizOpen(true)}
-                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-500 text-white text-xs font-bold hover:opacity-95 transition-all shadow-lg flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-200" />
-                      Take AI Skin & Wellness Quiz
-                    </button>
-
-                    <a
-                      href="#catalog"
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all flex items-center gap-2"
-                    >
-                      <Zap className="w-4 h-4 text-amber-400" />
-                      Explore Best Sellers
-                    </a>
-                  </div>
-
-                  {/* Trust Highlights */}
-                  <div className="flex flex-wrap items-center gap-6 pt-4 text-xs text-stone-300 font-medium border-t border-stone-800">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>Dermatologist Approved</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4 text-amber-300" />
-                      <span>UPI FastPay & Cards</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Leaf className="w-4 h-4 text-emerald-300" />
-                      <span>100% Organic & Clean</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hero Visual Card */}
-                <div className="relative flex justify-center">
-                  <div className="relative w-full max-w-md aspect-4/3 rounded-3xl overflow-hidden shadow-2xl border border-white/20 group">
-                    <img
-                      src="https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1000"
-                      alt="AuraGlow Botanical Rituals"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-stone-900/90 via-stone-900/20 to-transparent flex flex-col justify-end p-6">
-                      <span className="text-amber-300 text-xs font-bold uppercase tracking-widest mb-1">
-                        Featured Ritual Set
-                      </span>
-                      <h3 className="text-lg font-bold text-white font-serif">
-                        Lumifi Radiant Botanical Duo
-                      </h3>
-                      <p className="text-xs text-stone-300 line-clamp-1 mt-0.5">
-                        Vitamin C Serum + Multi-Collagen Peptides
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </section>
-
-            {/* Featured Category Thumbnails Section */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            {/* 2. SHOP BY CATEGORY */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/80 pb-3">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-bold text-stone-900 font-serif flex items-center gap-2">
                     <Grid className="w-5 h-5 text-amber-500" />
@@ -198,7 +140,7 @@ function StorefrontContent() {
                 )}
               </div>
 
-              {/* Thumbnails Grid (Shows 6 categories initially, expandable to show all) */}
+              {/* Thumbnails Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {(showAllCategories ? categories : categories.slice(0, 6)).map((catName) => {
                   const count = products.filter(p => p.category === catName).length;
@@ -259,12 +201,12 @@ function StorefrontContent() {
                 })}
               </div>
 
-              {/* Expand / Collapse Button (Shown when categories > 6) */}
+              {/* Expand / Collapse Button */}
               {categories.length > 6 && (
-                <div className="mt-6 text-center">
+                <div className="mt-4 text-center">
                   <button
                     onClick={() => setShowAllCategories(!showAllCategories)}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold transition-all shadow-md hover:shadow-xl border border-stone-800 group"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold transition-all shadow-md hover:shadow-xl border border-stone-800 group"
                   >
                     {showAllCategories ? (
                       <>
@@ -282,107 +224,143 @@ function StorefrontContent() {
               )}
             </section>
 
-            {/* DEFAULT HOMEPAGE SECTIONS (Shown when no specific filter is active) */}
+            {/* DEFAULT HOMEPAGE SECTIONS */}
             {selectedCategory === 'All' && !searchQuery && !selectedConcern && (
               <>
-                {/* 1. NEW ARRIVALS SECTION */}
+                {/* 3. NEW ARRIVALS */}
                 <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
-                  <div className="bg-gradient-to-r from-purple-900/90 via-stone-900 to-rose-950 text-white p-6 sm:p-8 rounded-3xl shadow-lg relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-purple-800/40">
-                    <div className="relative z-10 space-y-1">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[11px] font-extrabold uppercase tracking-widest">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-extrabold uppercase tracking-widest mb-1">
+                        <Sparkles className="w-3.5 h-3.5 text-rose-600" />
                         Fresh Releases
                       </div>
-                      <h2 className="text-2xl sm:text-3xl font-bold font-serif text-white">
-                        New Arrivals Collection
-                      </h2>
-                      <p className="text-xs sm:text-sm text-stone-300 max-w-xl">
-                        Discover our newest clinical-grade organic formulations and wellness rituals, freshly crafted for optimal efficacy.
-                      </p>
+                      <h2 className="text-2xl font-bold font-serif text-stone-900">New Arrivals</h2>
+                      <p className="text-xs text-stone-500">Discover our newest clinical-grade organic releases</p>
                     </div>
-
-                    <div className="relative z-10 shrink-0">
-                      <span className="text-xs font-bold text-amber-300 bg-white/10 px-4 py-2 rounded-2xl border border-white/20 backdrop-blur-md inline-block">
-                        ✨ 100% Authentic & Fresh Batches
-                      </span>
-                    </div>
-
-                    {/* Subtle Background Glow Accent */}
-                    <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
                   </div>
 
-                  {/* New Arrivals Products Carousel (Max 9 items) */}
+                  <ProductCarousel
+                    products={
+                      products.filter(p => p.isNewArrival).length > 0
+                        ? products.filter(p => p.isNewArrival)
+                        : products.slice(0, 9)
+                    }
+                    onQuickView={(p) => setSelectedProductForModal(p)}
+                    maxProducts={9}
+                  />
+                </section>
+
+                {/* 4. BEST SELLERS */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-extrabold uppercase tracking-widest mb-1">
+                        <Flame className="w-3.5 h-3.5 text-amber-600" />
+                        Top Demand
+                      </div>
+                      <h2 className="text-2xl font-bold font-serif text-stone-900">Best Sellers</h2>
+                      <p className="text-xs text-stone-500">Our highest rated skincare & wellness formulas</p>
+                    </div>
+                  </div>
+
+                  <ProductCarousel
+                    products={
+                      products.filter(p => p.isBestSeller).length > 0
+                        ? products.filter(p => p.isBestSeller)
+                        : [...products].sort((a, b) => b.rating - a.rating)
+                    }
+                    onQuickView={(p) => setSelectedProductForModal(p)}
+                    maxProducts={9}
+                  />
+                </section>
+
+                {/* 5. MOSTLY BUYED */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-extrabold uppercase tracking-widest mb-1">
+                        <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                        High Repeat Choice
+                      </div>
+                      <h2 className="text-2xl font-bold font-serif text-stone-900">Mostly Buyed</h2>
+                      <p className="text-xs text-stone-500">Formulas ordered again and again by our repeat customers</p>
+                    </div>
+                  </div>
+
+                  <ProductCarousel
+                    products={[...products].sort((a, b) => b.reviewCount - a.reviewCount)}
+                    onQuickView={(p) => setSelectedProductForModal(p)}
+                    maxProducts={9}
+                  />
+                </section>
+
+                {/* 6. CUSTOMERS FAVORITE */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 text-rose-900 text-[11px] font-extrabold uppercase tracking-widest mb-1">
+                        <ThumbsUp className="w-3.5 h-3.5 text-rose-600" />
+                        5-Star Approved
+                      </div>
+                      <h2 className="text-2xl font-bold font-serif text-stone-900">Customers Favorite</h2>
+                      <p className="text-xs text-stone-500">Formulas with highest customer satisfaction and glowing reviews</p>
+                    </div>
+                  </div>
+
+                  <ProductCarousel
+                    products={[...products].sort((a, b) => b.rating - a.rating)}
+                    onQuickView={(p) => setSelectedProductForModal(p)}
+                    maxProducts={9}
+                  />
+                </section>
+
+                {/* 7. SHOP BY PRICE */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-900 text-[11px] font-extrabold uppercase tracking-widest mb-1">
+                        <Tag className="w-3.5 h-3.5 text-purple-600" />
+                        Smart Budget
+                      </div>
+                      <h2 className="text-2xl font-bold font-serif text-stone-900">Shop By Price</h2>
+                      <p className="text-xs text-stone-500">Select a price tier to filter matching products instantly</p>
+                    </div>
+                  </div>
+
+                  {/* Price Range Tabs / Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {priceRanges.map(range => (
+                      <button
+                        key={range.id}
+                        onClick={() => setSelectedPriceRange(selectedPriceRange === range.id ? 'All' : range.id)}
+                        className={`p-3.5 rounded-2xl border text-center transition-all ${
+                          selectedPriceRange === range.id
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-md scale-[1.02]'
+                            : 'bg-white text-stone-800 border-stone-200 hover:border-rose-300 hover:bg-rose-50/50 shadow-2xs'
+                        }`}
+                      >
+                        <div className="text-xs font-bold font-serif">{range.label}</div>
+                        <div className={`text-[10px] mt-0.5 ${selectedPriceRange === range.id ? 'text-rose-100' : 'text-stone-500'}`}>
+                          {range.subtext}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Filtered Price Products Carousel */}
                   <div className="pt-2">
                     <ProductCarousel
-                      products={
-                        products.filter(p => p.isNewArrival).length > 0
-                          ? products.filter(p => p.isNewArrival)
-                          : products
-                      }
+                      products={getPriceFilteredProducts()}
                       onQuickView={(p) => setSelectedProductForModal(p)}
                       maxProducts={9}
-                      title="New Arrivals Carousel"
-                      subtitle="Swipe or scroll through our latest 9 botanical releases"
                     />
                   </div>
                 </section>
-
-                {/* 2. CATEGORY-BASED PRODUCT DISPLAY SECTIONS */}
-                {categories.map((catName) => {
-                  const catProducts = products.filter(p => p.category === catName);
-                  if (catProducts.length === 0) return null;
-                  const catThumb = getCategoryThumbnail(catName);
-
-                  return (
-                    <section key={`section-cat-${catName}`} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 pt-2">
-                      {/* Category Showcase Header Bar */}
-                      <div className="bg-white p-5 rounded-3xl border border-stone-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={catThumb}
-                            alt={catName}
-                            className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-stone-200 shrink-0"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h2 className="text-xl font-bold text-stone-900 font-serif">{catName}</h2>
-                              <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                                {catProducts.length} {catProducts.length === 1 ? 'Item' : 'Items'}
-                              </span>
-                            </div>
-                            <p className="text-xs text-stone-500 mt-0.5">
-                              Top 9 formulas in {catName.toLowerCase()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setSelectedCategory(catName);
-                            if (setSelectedTagFilter) setSelectedTagFilter('All');
-                            const catElem = document.getElementById('catalog');
-                            if (catElem) catElem.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
-                        >
-                          <span>Explore Full {catName}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-amber-300" />
-                        </button>
-                      </div>
-
-                      {/* Products Carousel for this category (Max 9) */}
-                      <ProductCarousel
-                        products={catProducts}
-                        onQuickView={(p) => setSelectedProductForModal(p)}
-                        maxProducts={9}
-                      />
-                    </section>
-                  );
-                })}
               </>
             )}
 
-            {/* Concern Filter Bar */}
+            {/* Concern / Targeted Benefit Filter Bar */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
@@ -433,6 +411,7 @@ function StorefrontContent() {
             </section>
 
           </div>
+
           )
         )}
 

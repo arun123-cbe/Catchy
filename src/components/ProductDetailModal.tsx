@@ -144,19 +144,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
               </p>
 
               {/* Benefits */}
-              <div className="mb-5">
-                <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider mb-2">
-                  Key Benefits
-                </h4>
-                <ul className="space-y-1.5 text-xs text-stone-600">
-                  {product.benefits.map((b, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {Array.isArray(product.benefits) && product.benefits.length > 0 && (
+                <div className="mb-5">
+                  <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider mb-2">
+                    Key Benefits
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-stone-600">
+                    {product.benefits.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Ingredients preview */}
               {product.ingredients && product.ingredients.length > 0 && (

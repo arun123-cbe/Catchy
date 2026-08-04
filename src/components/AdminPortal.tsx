@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { AdminInventory } from './admin/AdminInventory';
 import { AdminProducts } from './admin/AdminProducts';
 import { AdminOrders } from './admin/AdminOrders';
 import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
+import { AdminHomepageBanners } from './admin/AdminHomepageBanners';
+
 
 export const AdminPortal: React.FC = () => {
   const { adminSubTab, setAdminSubTab, setActiveView, products } = useStore();
@@ -294,7 +296,19 @@ export const AdminPortal: React.FC = () => {
           }`}
         >
           <LayoutDashboard className="w-4 h-4 text-indigo-500" />
-          Manage Products
+          Manage Products & Bulk Edit
+        </button>
+
+        <button
+          onClick={() => setAdminSubTab('banners')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            adminSubTab === 'banners'
+              ? 'bg-stone-900 text-white shadow-xs'
+              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-500" />
+          Homepage & Banners
         </button>
 
         <button
@@ -308,6 +322,7 @@ export const AdminPortal: React.FC = () => {
           <FolderPlus className="w-4 h-4 text-cyan-500" />
           Logo Upload & Categories
         </button>
+
 
         <button
           onClick={() => setAdminSubTab('inventory')}
@@ -344,8 +359,10 @@ export const AdminPortal: React.FC = () => {
       {adminSubTab === 'analytics' && <AdminDashboard />}
       {adminSubTab === 'inventory' && <AdminInventory />}
       {adminSubTab === 'products' && <AdminProducts />}
+      {adminSubTab === 'banners' && <AdminHomepageBanners />}
       {adminSubTab === 'orders' && <AdminOrders />}
       {adminSubTab === ('categories' as any) && <AdminCategoriesManager />}
+
 
     </div>
   );

@@ -108,23 +108,25 @@ export const CategoryPage: React.FC = () => {
   const processedProducts = useMemo(() => {
     return categoryProducts
       .filter((p) => {
+        if (!p) return false;
+        const q = categorySearch.trim().toLowerCase();
         // Search
         const matchesSearch =
-          !categorySearch.trim() ||
-          p.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
-          p.description.toLowerCase().includes(categorySearch.toLowerCase()) ||
-          p.tagline.toLowerCase().includes(categorySearch.toLowerCase()) ||
-          (p.ingredients && p.ingredients.some((i) => i.toLowerCase().includes(categorySearch.toLowerCase())));
+          !q ||
+          (p.name || '').toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q) ||
+          (p.tagline || '').toLowerCase().includes(q) ||
+          (Array.isArray(p.ingredients) && p.ingredients.some((i) => i && i.toLowerCase().includes(q)));
 
         // Tag filter
         let matchesTag = true;
-        if (selectedTagFilter === 'Best Seller') matchesTag = p.isBestSeller;
-        else if (selectedTagFilter === 'New Arrival') matchesTag = p.isNewArrival;
-        else if (selectedTagFilter === 'Organic') matchesTag = p.isOrganic;
-        else if (selectedTagFilter === 'Super Saver') matchesTag = p.isSuperSaver;
+        if (selectedTagFilter === 'Best Seller') matchesTag = !!p.isBestSeller;
+        else if (selectedTagFilter === 'New Arrival') matchesTag = !!p.isNewArrival;
+        else if (selectedTagFilter === 'Organic') matchesTag = !!p.isOrganic;
+        else if (selectedTagFilter === 'Super Saver') matchesTag = !!p.isSuperSaver;
 
         // Concern
-        const matchesConcern = selectedConcern === 'All' || p.concernsHandled?.includes(selectedConcern);
+        const matchesConcern = selectedConcern === 'All' || (Array.isArray(p.concernsHandled) && p.concernsHandled.includes(selectedConcern));
 
         return matchesSearch && matchesTag && matchesConcern;
       })
