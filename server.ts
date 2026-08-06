@@ -60,6 +60,18 @@ async function startServer() {
 
   // Store Data Sync API Endpoints for Cross-Device Synchronization
   app.get('/api/store-data', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    try {
+      if (fs.existsSync(DATA_FILE_PATH)) {
+        const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
+        const diskData = JSON.parse(raw);
+        serverStoreCache = { ...serverStoreCache, ...diskData };
+      }
+    } catch (_) {}
+
     res.json(serverStoreCache);
   });
 

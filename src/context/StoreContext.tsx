@@ -505,7 +505,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchServerStoreData = React.useCallback(async () => {
     try {
-      const res = await fetch('/api/store-data');
+      const res = await fetch(`/api/store-data?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
       if (!res.ok) return;
       const data = await res.json();
       
@@ -515,6 +520,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.products !== serialized) {
             lastSyncedRef.current.products = serialized;
             setProducts(data.products);
+            try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
           }
         }
         if (Array.isArray(data.categories) && data.categories.length > 0) {
@@ -522,6 +528,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.categories !== serialized) {
             lastSyncedRef.current.categories = serialized;
             setCategories(data.categories);
+            try { localStorage.setItem('auraglow_categories', serialized); } catch (_) {}
           }
         }
         if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
@@ -529,6 +536,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.categoryThumbnails !== serialized) {
             lastSyncedRef.current.categoryThumbnails = serialized;
             setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+            try { localStorage.setItem('auraglow_category_thumbnails', serialized); } catch (_) {}
           }
         }
         if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
@@ -536,6 +544,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.heroSlides !== serialized) {
             lastSyncedRef.current.heroSlides = serialized;
             setHeroSlides(data.heroSlides);
+            try { localStorage.setItem('auraglow_hero_slides', serialized); } catch (_) {}
           }
         }
         if (data.heroBannerConfig) {
@@ -543,6 +552,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.heroBannerConfig !== serialized) {
             lastSyncedRef.current.heroBannerConfig = serialized;
             setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+            try { localStorage.setItem('auraglow_hero_banner', serialized); } catch (_) {}
           }
         }
         if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
@@ -550,17 +560,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (lastSyncedRef.current.homepageBanners !== serialized) {
             lastSyncedRef.current.homepageBanners = serialized;
             setHomepageBanners(data.homepageBanners);
+            try { localStorage.setItem('auraglow_homepage_banners', serialized); } catch (_) {}
           }
         }
         if (data.customLogoUrl !== undefined && data.customLogoUrl !== lastSyncedRef.current.customLogoUrl) {
           lastSyncedRef.current.customLogoUrl = data.customLogoUrl || '';
           setCustomLogoUrl(data.customLogoUrl);
+          if (data.customLogoUrl) {
+            try { localStorage.setItem('catchystore_custom_logo', data.customLogoUrl); } catch (_) {}
+          } else {
+            try { localStorage.removeItem('catchystore_custom_logo'); } catch (_) {}
+          }
         }
         if (Array.isArray(data.orders) && data.orders.length > 0) {
           const serialized = JSON.stringify(data.orders);
           if (lastSyncedRef.current.orders !== serialized) {
             lastSyncedRef.current.orders = serialized;
             setOrders(data.orders);
+            try { localStorage.setItem('auraglow_orders_v2', serialized); } catch (_) {}
           }
         }
       }
@@ -572,17 +589,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     fetchServerStoreData();
 
-    // Re-fetch when switching back to tab
-    const handleFocus = () => fetchServerStoreData();
-    window.addEventListener('focus', handleFocus);
+    // Re-fetch when switching back to tab or window focus
+    const handleSyncTrigger = () => fetchServerStoreData();
+    window.addEventListener('focus', handleSyncTrigger);
+    window.addEventListener('visibilitychange', handleSyncTrigger);
 
-    // Polling interval every 5 seconds for cross-device updates
+    // Fast polling interval every 2 seconds for instant cross-device updates
     const pollInterval = setInterval(() => {
       fetchServerStoreData();
-    }, 5000);
+    }, 2000);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleSyncTrigger);
+      window.removeEventListener('visibilitychange', handleSyncTrigger);
       clearInterval(pollInterval);
     };
   }, [fetchServerStoreData]);
