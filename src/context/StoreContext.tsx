@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, Order, OrderStatus, HeroBannerConfig, DisplayBanner, HeroSlide } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_ORDERS } from '../data/initialData';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface StoreContextType {
   products: Product[];
@@ -339,17 +341,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('catchystore_custom_logo') || null;
   });
 
-  // Helper to push updated data to backend Express server
+  // Helper to push updated data to backend Express server & Firebase Firestore
   const pushToServer = (dataPayload: Record<string, any>) => {
+    // 1. Sync with backend server
     fetch('/api/store-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dataPayload)
     }).catch(err => console.warn('Server sync error:', err));
+
+    // 2. Sync with Firebase Firestore cloud database
+    try {
+      const storeRef = doc(db, 'store', 'catalog');
+      setDoc(storeRef, dataPayload, { merge: true }).catch(err => {
+        console.warn('Firestore write error:', err);
+      });
+    } catch (e) {
+      console.warn('Firestore setDoc exception:', e);
+    }
   };
 
   // Flag to prevent overwriting server state before initial fetch
   const isServerSyncedRef = React.useRef(false);
+
+  // Firestore Real-Time Listener for Cross-Device Instant Synchronization
+  useEffect(() => {
+    let unsubscribe: () => void = () => {};
+    try {
+      const storeDocRef = doc(db, 'store', 'catalog');
+      unsubscribe = onSnapshot(storeDocRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (Array.isArray(data.products) && data.products.length > 0) {
+            setProducts(data.products);
+          }
+          if (Array.isArray(data.categories) && data.categories.length > 0) {
+            setCategories(data.categories);
+          }
+          if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
+            setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+          }
+          if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
+            setHeroSlides(data.heroSlides);
+          }
+          if (data.heroBannerConfig) {
+            setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+          }
+          if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
+            setHomepageBanners(data.homepageBanners);
+          }
+          if (data.customLogoUrl !== undefined) {
+            setCustomLogoUrl(data.customLogoUrl);
+          }
+          if (Array.isArray(data.orders) && data.orders.length > 0) {
+            setOrders(data.orders);
+          }
+          isServerSyncedRef.current = true;
+        }
+      }, (err) => {
+        console.warn('Firestore real-time subscription error:', err);
+      });
+    } catch (err) {
+      console.warn('Firestore listener setup failed:', err);
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const fetchServerStoreData = React.useCallback(async () => {
     try {
