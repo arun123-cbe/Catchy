@@ -255,13 +255,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     orders?: string;
   }>({});
 
-  const firestoreQuotaExhaustedRef = React.useRef<boolean>(() => {
-    try {
-      return sessionStorage.getItem('fs_quota_exhausted') === 'true';
-    } catch (_) {
-      return false;
-    }
-  });
+  const firestoreQuotaExhaustedRef = React.useRef<boolean>(
+    typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs_quota_exhausted') === 'true'
+  );
 
   // Helper to push updated data to backend Express server & Firebase Firestore safely
   const pushToServer = (dataPayload: Record<string, any>) => {
