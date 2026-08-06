@@ -341,101 +341,161 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('catchystore_custom_logo') || null;
   });
 
-  // Helper to push updated data to backend Express server & Firebase Firestore
+  // Reference cache to track state signatures and prevent write loops or redundant syncs
+  const lastSyncedRef = React.useRef<{
+    heroSlides?: string;
+    heroBannerConfig?: string;
+    homepageBanners?: string;
+    customLogoUrl?: string;
+    products?: string;
+    categories?: string;
+    categoryThumbnails?: string;
+    orders?: string;
+  }>({});
+
+  const firestoreQuotaExhaustedRef = React.useRef<boolean>(() => {
+    try {
+      return sessionStorage.getItem('fs_quota_exhausted') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+
+  // Helper to push updated data to backend Express server & Firebase Firestore safely
   const pushToServer = (dataPayload: Record<string, any>) => {
-    // 1. Sync with Express backend server (disk storage)
+    // 1. Sync with Express backend server (disk storage, zero quota limits)
     fetch('/api/store-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dataPayload)
     }).catch(err => console.warn('Server sync error:', err));
 
-    // 2. Sync with Firebase Firestore cloud database (split docs to prevent 1MB limit issues)
+    // 2. Sync with Firebase Firestore cloud database if quota is not exhausted
+    if (firestoreQuotaExhaustedRef.current) return;
+
     try {
+      const handleFsErr = (err: any) => {
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('resource-exhausted') || err?.message?.includes('Quota limit exceeded')) {
+          firestoreQuotaExhaustedRef.current = true;
+          try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
+        }
+      };
+
       if (dataPayload.products !== undefined) {
-        setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true })
-          .catch(err => console.warn('Firestore products write error:', err));
+        setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true }).catch(handleFsErr);
       }
       if (dataPayload.homepageBanners !== undefined || dataPayload.heroBannerConfig !== undefined || dataPayload.heroSlides !== undefined) {
         const bannerPayload: Record<string, any> = {};
         if (dataPayload.homepageBanners !== undefined) bannerPayload.homepageBanners = dataPayload.homepageBanners;
         if (dataPayload.heroBannerConfig !== undefined) bannerPayload.heroBannerConfig = dataPayload.heroBannerConfig;
         if (dataPayload.heroSlides !== undefined) bannerPayload.heroSlides = dataPayload.heroSlides;
-        setDoc(doc(db, 'store', 'banners'), bannerPayload, { merge: true })
-          .catch(err => console.warn('Firestore banners write error:', err));
+        setDoc(doc(db, 'store', 'banners'), bannerPayload, { merge: true }).catch(handleFsErr);
       }
       if (dataPayload.categories !== undefined || dataPayload.categoryThumbnails !== undefined || dataPayload.customLogoUrl !== undefined) {
         const catPayload: Record<string, any> = {};
         if (dataPayload.categories !== undefined) catPayload.categories = dataPayload.categories;
         if (dataPayload.categoryThumbnails !== undefined) catPayload.categoryThumbnails = dataPayload.categoryThumbnails;
         if (dataPayload.customLogoUrl !== undefined) catPayload.customLogoUrl = dataPayload.customLogoUrl;
-        setDoc(doc(db, 'store', 'categories'), catPayload, { merge: true })
-          .catch(err => console.warn('Firestore categories write error:', err));
+        setDoc(doc(db, 'store', 'categories'), catPayload, { merge: true }).catch(handleFsErr);
       }
       if (dataPayload.orders !== undefined) {
-        setDoc(doc(db, 'store', 'orders'), { orders: dataPayload.orders }, { merge: true })
-          .catch(err => console.warn('Firestore orders write error:', err));
+        setDoc(doc(db, 'store', 'orders'), { orders: dataPayload.orders }, { merge: true }).catch(handleFsErr);
       }
     } catch (e) {
-      console.warn('Firestore setDoc exception:', e);
+      firestoreQuotaExhaustedRef.current = true;
+      try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
     }
   };
 
   // Firestore Real-Time Listeners for Cross-Device Instant Synchronization
   useEffect(() => {
+    if (firestoreQuotaExhaustedRef.current) return;
+
     const unsubs: Array<() => void> = [];
 
     const handleSync = (data: any) => {
       if (!data || typeof data !== 'object') return;
       if (Array.isArray(data.products) && data.products.length > 0) {
-        setProducts(data.products);
-        try { localStorage.setItem('auraglow_products_v2', JSON.stringify(data.products)); } catch (_) {}
+        const serialized = JSON.stringify(data.products);
+        if (lastSyncedRef.current.products !== serialized) {
+          lastSyncedRef.current.products = serialized;
+          setProducts(data.products);
+          try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
+        }
       }
       if (Array.isArray(data.categories) && data.categories.length > 0) {
-        setCategories(data.categories);
-        try { localStorage.setItem('auraglow_categories', JSON.stringify(data.categories)); } catch (_) {}
+        const serialized = JSON.stringify(data.categories);
+        if (lastSyncedRef.current.categories !== serialized) {
+          lastSyncedRef.current.categories = serialized;
+          setCategories(data.categories);
+          try { localStorage.setItem('auraglow_categories', serialized); } catch (_) {}
+        }
       }
       if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
-        setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
-        try { localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(data.categoryThumbnails)); } catch (_) {}
+        const serialized = JSON.stringify(data.categoryThumbnails);
+        if (lastSyncedRef.current.categoryThumbnails !== serialized) {
+          lastSyncedRef.current.categoryThumbnails = serialized;
+          setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+          try { localStorage.setItem('auraglow_category_thumbnails', serialized); } catch (_) {}
+        }
       }
       if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
-        setHeroSlides(data.heroSlides);
-        try { localStorage.setItem('auraglow_hero_slides', JSON.stringify(data.heroSlides)); } catch (_) {}
+        const serialized = JSON.stringify(data.heroSlides);
+        if (lastSyncedRef.current.heroSlides !== serialized) {
+          lastSyncedRef.current.heroSlides = serialized;
+          setHeroSlides(data.heroSlides);
+          try { localStorage.setItem('auraglow_hero_slides', serialized); } catch (_) {}
+        }
       }
       if (data.heroBannerConfig) {
-        setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
-        try { localStorage.setItem('auraglow_hero_banner', JSON.stringify(data.heroBannerConfig)); } catch (_) {}
+        const serialized = JSON.stringify(data.heroBannerConfig);
+        if (lastSyncedRef.current.heroBannerConfig !== serialized) {
+          lastSyncedRef.current.heroBannerConfig = serialized;
+          setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+          try { localStorage.setItem('auraglow_hero_banner', serialized); } catch (_) {}
+        }
       }
       if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
-        setHomepageBanners(data.homepageBanners);
-        try { localStorage.setItem('auraglow_homepage_banners', JSON.stringify(data.homepageBanners)); } catch (_) {}
+        const serialized = JSON.stringify(data.homepageBanners);
+        if (lastSyncedRef.current.homepageBanners !== serialized) {
+          lastSyncedRef.current.homepageBanners = serialized;
+          setHomepageBanners(data.homepageBanners);
+          try { localStorage.setItem('auraglow_homepage_banners', serialized); } catch (_) {}
+        }
       }
-      if (data.customLogoUrl !== undefined) {
+      if (data.customLogoUrl !== undefined && data.customLogoUrl !== lastSyncedRef.current.customLogoUrl) {
+        lastSyncedRef.current.customLogoUrl = data.customLogoUrl || '';
         setCustomLogoUrl(data.customLogoUrl);
         if (data.customLogoUrl) {
           try { localStorage.setItem('catchystore_custom_logo', data.customLogoUrl); } catch (_) {}
+        } else {
+          try { localStorage.removeItem('catchystore_custom_logo'); } catch (_) {}
         }
       }
       if (Array.isArray(data.orders) && data.orders.length > 0) {
-        setOrders(data.orders);
-        try { localStorage.setItem('auraglow_orders_v2', JSON.stringify(data.orders)); } catch (_) {}
+        const serialized = JSON.stringify(data.orders);
+        if (lastSyncedRef.current.orders !== serialized) {
+          lastSyncedRef.current.orders = serialized;
+          setOrders(data.orders);
+          try { localStorage.setItem('auraglow_orders_v2', serialized); } catch (_) {}
+        }
+      }
+    };
+
+    const handleFsSubErr = (err: any) => {
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('resource-exhausted') || err?.message?.includes('Quota limit exceeded')) {
+        firestoreQuotaExhaustedRef.current = true;
+        try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
       }
     };
 
     try {
-      // 1. Legacy catalog doc listener
-      unsubs.push(onSnapshot(doc(db, 'store', 'catalog'), (snap) => snap.exists() && handleSync(snap.data())));
-      // 2. Products doc listener
-      unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data())));
-      // 3. Banners doc listener
-      unsubs.push(onSnapshot(doc(db, 'store', 'banners'), (snap) => snap.exists() && handleSync(snap.data())));
-      // 4. Categories doc listener
-      unsubs.push(onSnapshot(doc(db, 'store', 'categories'), (snap) => snap.exists() && handleSync(snap.data())));
-      // 5. Orders doc listener
-      unsubs.push(onSnapshot(doc(db, 'store', 'orders'), (snap) => snap.exists() && handleSync(snap.data())));
+      unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
+      unsubs.push(onSnapshot(doc(db, 'store', 'banners'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
+      unsubs.push(onSnapshot(doc(db, 'store', 'categories'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
+      unsubs.push(onSnapshot(doc(db, 'store', 'orders'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
     } catch (err) {
-      console.warn('Firestore real-time subscription error:', err);
+      // Ignore listener setup error if quota reached
     }
 
     return () => {
@@ -451,28 +511,57 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       if (data && typeof data === 'object') {
         if (Array.isArray(data.products) && data.products.length > 0) {
-          setProducts(data.products);
+          const serialized = JSON.stringify(data.products);
+          if (lastSyncedRef.current.products !== serialized) {
+            lastSyncedRef.current.products = serialized;
+            setProducts(data.products);
+          }
         }
         if (Array.isArray(data.categories) && data.categories.length > 0) {
-          setCategories(data.categories);
+          const serialized = JSON.stringify(data.categories);
+          if (lastSyncedRef.current.categories !== serialized) {
+            lastSyncedRef.current.categories = serialized;
+            setCategories(data.categories);
+          }
         }
         if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
-          setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+          const serialized = JSON.stringify(data.categoryThumbnails);
+          if (lastSyncedRef.current.categoryThumbnails !== serialized) {
+            lastSyncedRef.current.categoryThumbnails = serialized;
+            setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+          }
         }
         if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
-          setHeroSlides(data.heroSlides);
+          const serialized = JSON.stringify(data.heroSlides);
+          if (lastSyncedRef.current.heroSlides !== serialized) {
+            lastSyncedRef.current.heroSlides = serialized;
+            setHeroSlides(data.heroSlides);
+          }
         }
         if (data.heroBannerConfig) {
-          setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+          const serialized = JSON.stringify(data.heroBannerConfig);
+          if (lastSyncedRef.current.heroBannerConfig !== serialized) {
+            lastSyncedRef.current.heroBannerConfig = serialized;
+            setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+          }
         }
         if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
-          setHomepageBanners(data.homepageBanners);
+          const serialized = JSON.stringify(data.homepageBanners);
+          if (lastSyncedRef.current.homepageBanners !== serialized) {
+            lastSyncedRef.current.homepageBanners = serialized;
+            setHomepageBanners(data.homepageBanners);
+          }
         }
-        if (data.customLogoUrl !== undefined) {
+        if (data.customLogoUrl !== undefined && data.customLogoUrl !== lastSyncedRef.current.customLogoUrl) {
+          lastSyncedRef.current.customLogoUrl = data.customLogoUrl || '';
           setCustomLogoUrl(data.customLogoUrl);
         }
         if (Array.isArray(data.orders) && data.orders.length > 0) {
-          setOrders(data.orders);
+          const serialized = JSON.stringify(data.orders);
+          if (lastSyncedRef.current.orders !== serialized) {
+            lastSyncedRef.current.orders = serialized;
+            setOrders(data.orders);
+          }
         }
       }
     } catch (e) {
@@ -498,75 +587,117 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [fetchServerStoreData]);
 
-  // Sync Hero Slides to LocalStorage & Server
+  // Sync Hero Slides to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_hero_slides', JSON.stringify(heroSlides));
-      pushToServer({ heroSlides });
+      const serialized = JSON.stringify(heroSlides);
+      if (lastSyncedRef.current.heroSlides === undefined) {
+        lastSyncedRef.current.heroSlides = serialized;
+      } else if (lastSyncedRef.current.heroSlides !== serialized) {
+        lastSyncedRef.current.heroSlides = serialized;
+        localStorage.setItem('auraglow_hero_slides', serialized);
+        pushToServer({ heroSlides });
+      }
     } catch (e) {
       console.warn('Could not save hero slides:', e);
     }
   }, [heroSlides]);
 
-  // Sync Hero Banner to LocalStorage & Server
+  // Sync Hero Banner to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_hero_banner', JSON.stringify(heroBannerConfig));
-      pushToServer({ heroBannerConfig });
+      const serialized = JSON.stringify(heroBannerConfig);
+      if (lastSyncedRef.current.heroBannerConfig === undefined) {
+        lastSyncedRef.current.heroBannerConfig = serialized;
+      } else if (lastSyncedRef.current.heroBannerConfig !== serialized) {
+        lastSyncedRef.current.heroBannerConfig = serialized;
+        localStorage.setItem('auraglow_hero_banner', serialized);
+        pushToServer({ heroBannerConfig });
+      }
     } catch (e) {
       console.warn('Could not save hero banner:', e);
     }
   }, [heroBannerConfig]);
 
-  // Sync Display Banners to LocalStorage & Server
+  // Sync Display Banners to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_homepage_banners', JSON.stringify(homepageBanners));
-      pushToServer({ homepageBanners });
+      const serialized = JSON.stringify(homepageBanners);
+      if (lastSyncedRef.current.homepageBanners === undefined) {
+        lastSyncedRef.current.homepageBanners = serialized;
+      } else if (lastSyncedRef.current.homepageBanners !== serialized) {
+        lastSyncedRef.current.homepageBanners = serialized;
+        localStorage.setItem('auraglow_homepage_banners', serialized);
+        pushToServer({ homepageBanners });
+      }
     } catch (e) {
       console.warn('Could not save homepage banners:', e);
     }
   }, [homepageBanners]);
 
-  // Sync Custom Logo to LocalStorage & Server
+  // Sync Custom Logo to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      if (customLogoUrl) {
-        localStorage.setItem('catchystore_custom_logo', customLogoUrl);
-      } else {
-        localStorage.removeItem('catchystore_custom_logo');
+      const val = customLogoUrl || '';
+      if (lastSyncedRef.current.customLogoUrl === undefined) {
+        lastSyncedRef.current.customLogoUrl = val;
+      } else if (lastSyncedRef.current.customLogoUrl !== val) {
+        lastSyncedRef.current.customLogoUrl = val;
+        if (customLogoUrl) {
+          localStorage.setItem('catchystore_custom_logo', customLogoUrl);
+        } else {
+          localStorage.removeItem('catchystore_custom_logo');
+        }
+        pushToServer({ customLogoUrl });
       }
-      pushToServer({ customLogoUrl });
     } catch (e) {
       console.warn('Could not save custom logo:', e);
     }
   }, [customLogoUrl]);
 
-  // Sync Products to LocalStorage & Server
+  // Sync Products to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_products_v2', JSON.stringify(products));
-      pushToServer({ products });
+      const serialized = JSON.stringify(products);
+      if (lastSyncedRef.current.products === undefined) {
+        lastSyncedRef.current.products = serialized;
+      } else if (lastSyncedRef.current.products !== serialized) {
+        lastSyncedRef.current.products = serialized;
+        localStorage.setItem('auraglow_products_v2', serialized);
+        pushToServer({ products });
+      }
     } catch (e) {
       console.warn('Could not save products:', e);
     }
   }, [products]);
 
-  // Sync Categories to LocalStorage & Server
+  // Sync Categories to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_categories', JSON.stringify(categories));
-      pushToServer({ categories });
+      const serialized = JSON.stringify(categories);
+      if (lastSyncedRef.current.categories === undefined) {
+        lastSyncedRef.current.categories = serialized;
+      } else if (lastSyncedRef.current.categories !== serialized) {
+        lastSyncedRef.current.categories = serialized;
+        localStorage.setItem('auraglow_categories', serialized);
+        pushToServer({ categories });
+      }
     } catch (e) {
       console.warn('Could not save categories:', e);
     }
   }, [categories]);
 
-  // Sync Category Thumbnails to LocalStorage & Server
+  // Sync Category Thumbnails to LocalStorage & Server on USER mutation only
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
-      pushToServer({ categoryThumbnails });
+      const serialized = JSON.stringify(categoryThumbnails);
+      if (lastSyncedRef.current.categoryThumbnails === undefined) {
+        lastSyncedRef.current.categoryThumbnails = serialized;
+      } else if (lastSyncedRef.current.categoryThumbnails !== serialized) {
+        lastSyncedRef.current.categoryThumbnails = serialized;
+        localStorage.setItem('auraglow_category_thumbnails', serialized);
+        pushToServer({ categoryThumbnails });
+      }
     } catch (e) {
       console.warn('Could not save category thumbnails:', e);
     }

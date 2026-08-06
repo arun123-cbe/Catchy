@@ -1,6 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
+
+// Silence internal Firestore SDK console warnings/errors (e.g., quota exhausted backoff logs)
+try {
+  setLogLevel('silent');
+} catch (_) {}
 
 const firebaseConfig = {
   apiKey: firebaseConfigJson.apiKey,
