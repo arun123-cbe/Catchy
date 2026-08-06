@@ -52,6 +52,7 @@ interface StoreContextType {
   updateProduct: (product: Product) => void;
   deleteProduct: (productId: string) => void;
   updateStock: (productId: string, newStock: number) => void;
+  saveAllProducts: (customProducts?: Product[]) => void;
   
   // Bulk Product Operations
   bulkUpdateProducts: (ids: string[], updates: Partial<Product>) => void;
@@ -927,6 +928,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
+  const saveAllProducts = (customProducts?: Product[]) => {
+    const targetProducts = customProducts || products;
+    setProducts(targetProducts);
+    pushToServer({ products: targetProducts });
+    try {
+      localStorage.setItem('auraglow_products_v2', JSON.stringify(targetProducts));
+    } catch (_) {}
+  };
+
   // Banner Actions
   const updateHeroBannerConfig = (partialConfig: Partial<HeroBannerConfig>) => {
     setHeroBannerConfig(prev => ({ ...prev, ...partialConfig }));
@@ -1051,6 +1061,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateProduct,
         deleteProduct,
         updateStock,
+        saveAllProducts,
         bulkUpdateProducts,
         bulkDeleteProducts,
         bulkUpdateCategoryForProducts,

@@ -32,10 +32,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
         {/* Product Image Container */}
         <div className="relative aspect-4/3 w-full overflow-hidden bg-stone-100 cursor-pointer" onClick={() => onQuickView(product)}>
           <img
-            src={product.image}
+            src={product.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
             alt={product.name}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+            }}
           />
 
           {/* Top Badge Tags */}

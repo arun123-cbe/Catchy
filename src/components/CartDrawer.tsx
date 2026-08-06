@@ -91,9 +91,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onProceedToCheckout }) =
                   <div key={`${item.product.id}-${idx}`} className="pt-4 first:pt-0 flex gap-3">
                     {/* Thumbnail */}
                     <img
-                      src={item.product.image}
+                      src={item.product.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
                       alt={item.product.name}
                       className="w-20 h-20 rounded-xl object-cover bg-stone-100 shrink-0 border border-stone-200"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+                      }}
                     />
 
                     <div className="flex-1 flex flex-col justify-between">

@@ -20,10 +20,29 @@ export const AdminProducts: React.FC = () => {
     formatPrice,
     bulkUpdateProducts,
     bulkDeleteProducts,
-    bulkUpdateCategoryForProducts
+    bulkUpdateCategoryForProducts,
+    saveAllProducts
   } = useStore();
 
   const [search, setSearch] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const handleTriggerSaveAll = () => {
+    saveAllProducts();
+    setHasUnsavedChanges(false);
+    setBulkSuccessMsg('✅ All product details, prices, and uploaded pictures have been saved and published live to the website!');
+    setTimeout(() => setBulkSuccessMsg(''), 5000);
+  };
+
+  const handleBatchImageUpload = async (product: Product, file: File) => {
+    const compressed = await compressProductImage(file);
+    if (compressed) {
+      updateProduct({ ...product, image: compressed });
+      setHasUnsavedChanges(true);
+      setBulkSuccessMsg(`Updated picture for "${product.name}"! Click "Save All Changes" to publish live.`);
+      setTimeout(() => setBulkSuccessMsg(''), 4000);
+    }
+  };
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | 'All'>('All');
   const [selectedTagFilter, setSelectedTagFilter] = useState<'All' | 'New Arrivals' | 'Best Sellers' | 'Mostly Buyed' | 'Customers Favorite' | 'Organic' | 'Super Saver'>('All');
   const [selectedPriceFilter, setSelectedPriceFilter] = useState<'All' | 'under-500' | '500-999' | '1000-1999' | '2000-plus'>('All');
@@ -218,10 +237,15 @@ export const AdminProducts: React.FC = () => {
 
     if (editingProduct) {
       updateProduct({ ...payload, id: editingProduct.id });
+      setBulkSuccessMsg(`Saved changes for "${payload.name}"! Published live on website.`);
     } else {
-      addProduct(payload);
+      const created = addProduct(payload);
+      setBulkSuccessMsg(`Added new product "${created.name}"! Published live on website.`);
     }
+    saveAllProducts();
+    setHasUnsavedChanges(false);
     setIsAddModalOpen(false);
+    setTimeout(() => setBulkSuccessMsg(''), 5000);
   };
 
   // Helper to map parsed rows to Product objects
@@ -428,10 +452,12 @@ export const AdminProducts: React.FC = () => {
   const handleConfirmBulkUpload = () => {
     if (csvPreview.length > 0) {
       bulkAddProducts(csvPreview);
+      saveAllProducts();
       setIsBulkModalOpen(false);
       setCsvPreview([]);
       setCsvFileName('');
-      alert(`Successfully imported ${csvPreview.length} products!`);
+      setBulkSuccessMsg(`Successfully imported & published ${csvPreview.length} products live to the website!`);
+      setTimeout(() => setBulkSuccessMsg(''), 5000);
     }
   };
 
@@ -483,6 +509,15 @@ export const AdminProducts: React.FC = () => {
           >
             <Upload className="w-4 h-4 text-emerald-300" />
             Bulk CSV Upload
+          </button>
+
+          <button
+            onClick={handleTriggerSaveAll}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shrink-0 ring-2 ring-emerald-500/30 active:scale-95"
+            title="Force save and publish all product catalog changes & pictures live to website"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+            <span>Save All Changes</span>
           </button>
 
           <button
@@ -919,37 +954,88 @@ export const AdminProducts: React.FC = () => {
       ) : (
         /* BATCH GRID SPREADSHEET EDITOR MODE */
         <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden p-4 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
             <div>
               <h3 className="text-sm font-bold font-serif text-stone-900 flex items-center gap-2">
                 <Grid className="w-4 h-4 text-indigo-600" />
-                Interactive Batch Product Grid Editor
+                Interactive Batch Product & Image Grid Editor
               </h3>
-              <p className="text-[11px] text-stone-500">Edit titles, categories, prices, and stock levels directly inside inputs below</p>
+              <p className="text-[11px] text-stone-500">Edit titles, pictures, categories, prices, and stock levels directly inside inputs below</p>
             </div>
-            <span className="text-xs font-bold text-stone-400">{filtered.length} products shown</span>
+            
+            <button
+              onClick={handleTriggerSaveAll}
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+              <span>Save All Products & Pictures</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-stone-50 border-b border-stone-200 text-[10px] text-stone-500 uppercase font-bold">
                 <tr>
+                  <th className="p-3 w-44">Product Picture</th>
                   <th className="p-3">Product Name</th>
                   <th className="p-3">Category</th>
                   <th className="p-3">Price (₹)</th>
                   <th className="p-3">Original Price (₹)</th>
                   <th className="p-3">Stock</th>
                   <th className="p-3">Bestseller</th>
-                  <th className="p-3 text-right">Quick Save</th>
+                  <th className="p-3 text-right">Row Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((prod) => (
                   <tr key={`batch-grid-${prod.id}`} className="hover:bg-stone-50/50">
-                    <td className="p-2 min-w-[200px]">
+                    
+                    {/* Picture Thumbnail & File Upload / URL */}
+                    <td className="p-2 w-44">
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={prod.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
+                          alt={prod.name}
+                          className="w-10 h-10 rounded-lg object-cover bg-stone-100 border border-stone-200 shrink-0"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+                          }}
+                        />
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <label className="px-2 py-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-bold rounded cursor-pointer border border-stone-300 flex items-center gap-1 shrink-0">
+                            <Upload className="w-2.5 h-2.5 text-stone-600" />
+                            <span>Upload</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleBatchImageUpload(prod, f);
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                          <input
+                            type="text"
+                            defaultValue={prod.image}
+                            placeholder="Image URL..."
+                            onBlur={(e) => {
+                              if (e.target.value.trim() && e.target.value !== prod.image) {
+                                updateProduct({ ...prod, image: e.target.value.trim() });
+                                setHasUnsavedChanges(true);
+                              }
+                            }}
+                            className="w-20 text-[9px] bg-stone-50 border border-stone-200 rounded px-1 py-0.5 text-stone-600 font-mono truncate"
+                          />
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-2 min-w-[180px]">
                       <input
                         type="text"
                         defaultValue={prod.name}
+                        onChange={() => setHasUnsavedChanges(true)}
                         onBlur={(e) => {
                           if (e.target.value.trim() && e.target.value !== prod.name) {
                             updateProduct({ ...prod, name: e.target.value.trim() });
@@ -959,11 +1045,12 @@ export const AdminProducts: React.FC = () => {
                       />
                     </td>
 
-                    <td className="p-2 min-w-[160px]">
+                    <td className="p-2 min-w-[150px]">
                       <select
                         defaultValue={prod.category}
                         onChange={(e) => {
                           updateProduct({ ...prod, category: e.target.value });
+                          setHasUnsavedChanges(true);
                         }}
                         className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-medium focus:bg-white"
                       >
@@ -977,6 +1064,7 @@ export const AdminProducts: React.FC = () => {
                       <input
                         type="number"
                         defaultValue={prod.price}
+                        onChange={() => setHasUnsavedChanges(true)}
                         onBlur={(e) => {
                           const val = parseFloat(e.target.value);
                           if (!isNaN(val) && val > 0 && val !== prod.price) {
@@ -991,6 +1079,7 @@ export const AdminProducts: React.FC = () => {
                       <input
                         type="number"
                         defaultValue={prod.originalPrice || ''}
+                        onChange={() => setHasUnsavedChanges(true)}
                         onBlur={(e) => {
                           const val = parseFloat(e.target.value);
                           if (!isNaN(val)) {
@@ -1005,6 +1094,7 @@ export const AdminProducts: React.FC = () => {
                       <input
                         type="number"
                         defaultValue={prod.stock}
+                        onChange={() => setHasUnsavedChanges(true)}
                         onBlur={(e) => {
                           const val = parseInt(e.target.value);
                           if (!isNaN(val) && val >= 0 && val !== prod.stock) {
@@ -1021,20 +1111,53 @@ export const AdminProducts: React.FC = () => {
                         defaultChecked={prod.isBestSeller}
                         onChange={(e) => {
                           updateProduct({ ...prod, isBestSeller: e.target.checked });
+                          setHasUnsavedChanges(true);
                         }}
                         className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                       />
                     </td>
 
                     <td className="p-2 text-right">
-                      <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-end gap-1">
-                        <Check className="w-3 h-3" /> Auto Saved
-                      </span>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => {
+                            saveAllProducts();
+                            setBulkSuccessMsg(`Saved product "${prod.name}"!`);
+                            setTimeout(() => setBulkSuccessMsg(''), 3000);
+                          }}
+                          className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded font-bold text-[10px] flex items-center gap-1"
+                        >
+                          <Check className="w-3 h-3 text-emerald-600" /> Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete "${prod.name}"?`)) {
+                              deleteProduct(prod.id);
+                              saveAllProducts();
+                            }
+                          }}
+                          className="p-1 hover:bg-rose-50 text-stone-400 hover:text-rose-600 rounded"
+                          title="Delete product"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+            <span className="text-xs text-stone-500 font-medium">Click button on right to permanently publish all changes live to website</span>
+            <button
+              onClick={handleTriggerSaveAll}
+              className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+              <span>Save All Products & Pictures</span>
+            </button>
           </div>
         </div>
       )}
@@ -1469,6 +1592,27 @@ export const AdminProducts: React.FC = () => {
             )}
 
           </div>
+        </div>
+      )}
+
+      {/* Persistent Floating Sticky Save Action Bar */}
+      {(hasUnsavedChanges || viewMode === 'batchGrid') && (
+        <div className="fixed bottom-6 right-6 z-40 bg-stone-900/95 backdrop-blur-md text-white px-5 py-3.5 rounded-2xl border border-stone-700 shadow-2xl flex items-center gap-4 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            <div>
+              <span className="text-xs font-bold block text-stone-100 font-serif">Product Catalog Changes Pending</span>
+              <span className="text-[10px] text-stone-400 block">Click button to permanently publish edits & pictures live</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleTriggerSaveAll}
+            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-extrabold text-xs shadow-lg transition-all flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
+          >
+            <CheckCircle2 className="w-4 h-4 text-stone-950" />
+            <span>Save All Changes Live</span>
+          </button>
         </div>
       )}
 

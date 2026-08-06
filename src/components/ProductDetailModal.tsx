@@ -44,9 +44,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
             <div>
               <div className="aspect-square rounded-2xl overflow-hidden mb-4 shadow-sm bg-stone-200 relative">
                 <img
-                  src={product.image}
+                  src={product.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+                  }}
                 />
                 {product.isOrganic && (
                   <span className="absolute top-3 left-3 bg-emerald-900/90 text-white text-xs font-semibold px-2.5 py-1 rounded-lg backdrop-blur-xs flex items-center gap-1">

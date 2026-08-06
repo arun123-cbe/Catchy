@@ -260,9 +260,12 @@ export const PredictiveSearch: React.FC<{ isMobile?: boolean; onCloseMobileMenu?
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
-                          src={product.image}
+                          src={product.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
                           alt={product.name}
                           className="w-12 h-12 rounded-xl object-cover border border-stone-200 shadow-2xs group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+                          }}
                         />
                         <div className="min-w-0">
                           <h4 className="text-xs font-bold text-stone-900 truncate group-hover:text-rose-600 transition-colors">
@@ -362,9 +365,12 @@ export const PredictiveSearch: React.FC<{ isMobile?: boolean; onCloseMobileMenu?
                       {/* Product Thumbnail & Details */}
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <img
-                          src={product.image}
+                          src={product.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800'}
                           alt={product.name}
                           className="w-14 h-14 rounded-xl object-cover border border-stone-200 shadow-xs group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+                          }}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 mb-0.5">
