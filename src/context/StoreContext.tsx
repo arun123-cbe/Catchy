@@ -343,70 +343,103 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Helper to push updated data to backend Express server & Firebase Firestore
   const pushToServer = (dataPayload: Record<string, any>) => {
-    // 1. Sync with backend server
+    // 1. Sync with Express backend server (disk storage)
     fetch('/api/store-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dataPayload)
     }).catch(err => console.warn('Server sync error:', err));
 
-    // 2. Sync with Firebase Firestore cloud database
+    // 2. Sync with Firebase Firestore cloud database (split docs to prevent 1MB limit issues)
     try {
-      const storeRef = doc(db, 'store', 'catalog');
-      setDoc(storeRef, dataPayload, { merge: true }).catch(err => {
-        console.warn('Firestore write error:', err);
-      });
+      if (dataPayload.products !== undefined) {
+        setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true })
+          .catch(err => console.warn('Firestore products write error:', err));
+      }
+      if (dataPayload.homepageBanners !== undefined || dataPayload.heroBannerConfig !== undefined || dataPayload.heroSlides !== undefined) {
+        const bannerPayload: Record<string, any> = {};
+        if (dataPayload.homepageBanners !== undefined) bannerPayload.homepageBanners = dataPayload.homepageBanners;
+        if (dataPayload.heroBannerConfig !== undefined) bannerPayload.heroBannerConfig = dataPayload.heroBannerConfig;
+        if (dataPayload.heroSlides !== undefined) bannerPayload.heroSlides = dataPayload.heroSlides;
+        setDoc(doc(db, 'store', 'banners'), bannerPayload, { merge: true })
+          .catch(err => console.warn('Firestore banners write error:', err));
+      }
+      if (dataPayload.categories !== undefined || dataPayload.categoryThumbnails !== undefined || dataPayload.customLogoUrl !== undefined) {
+        const catPayload: Record<string, any> = {};
+        if (dataPayload.categories !== undefined) catPayload.categories = dataPayload.categories;
+        if (dataPayload.categoryThumbnails !== undefined) catPayload.categoryThumbnails = dataPayload.categoryThumbnails;
+        if (dataPayload.customLogoUrl !== undefined) catPayload.customLogoUrl = dataPayload.customLogoUrl;
+        setDoc(doc(db, 'store', 'categories'), catPayload, { merge: true })
+          .catch(err => console.warn('Firestore categories write error:', err));
+      }
+      if (dataPayload.orders !== undefined) {
+        setDoc(doc(db, 'store', 'orders'), { orders: dataPayload.orders }, { merge: true })
+          .catch(err => console.warn('Firestore orders write error:', err));
+      }
     } catch (e) {
       console.warn('Firestore setDoc exception:', e);
     }
   };
 
-  // Flag to prevent overwriting server state before initial fetch
-  const isServerSyncedRef = React.useRef(false);
-
-  // Firestore Real-Time Listener for Cross-Device Instant Synchronization
+  // Firestore Real-Time Listeners for Cross-Device Instant Synchronization
   useEffect(() => {
-    let unsubscribe: () => void = () => {};
-    try {
-      const storeDocRef = doc(db, 'store', 'catalog');
-      unsubscribe = onSnapshot(storeDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          if (Array.isArray(data.products) && data.products.length > 0) {
-            setProducts(data.products);
-          }
-          if (Array.isArray(data.categories) && data.categories.length > 0) {
-            setCategories(data.categories);
-          }
-          if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
-            setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
-          }
-          if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
-            setHeroSlides(data.heroSlides);
-          }
-          if (data.heroBannerConfig) {
-            setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
-          }
-          if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
-            setHomepageBanners(data.homepageBanners);
-          }
-          if (data.customLogoUrl !== undefined) {
-            setCustomLogoUrl(data.customLogoUrl);
-          }
-          if (Array.isArray(data.orders) && data.orders.length > 0) {
-            setOrders(data.orders);
-          }
-          isServerSyncedRef.current = true;
+    const unsubs: Array<() => void> = [];
+
+    const handleSync = (data: any) => {
+      if (!data || typeof data !== 'object') return;
+      if (Array.isArray(data.products) && data.products.length > 0) {
+        setProducts(data.products);
+        try { localStorage.setItem('auraglow_products_v2', JSON.stringify(data.products)); } catch (_) {}
+      }
+      if (Array.isArray(data.categories) && data.categories.length > 0) {
+        setCategories(data.categories);
+        try { localStorage.setItem('auraglow_categories', JSON.stringify(data.categories)); } catch (_) {}
+      }
+      if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
+        setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+        try { localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(data.categoryThumbnails)); } catch (_) {}
+      }
+      if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
+        setHeroSlides(data.heroSlides);
+        try { localStorage.setItem('auraglow_hero_slides', JSON.stringify(data.heroSlides)); } catch (_) {}
+      }
+      if (data.heroBannerConfig) {
+        setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+        try { localStorage.setItem('auraglow_hero_banner', JSON.stringify(data.heroBannerConfig)); } catch (_) {}
+      }
+      if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
+        setHomepageBanners(data.homepageBanners);
+        try { localStorage.setItem('auraglow_homepage_banners', JSON.stringify(data.homepageBanners)); } catch (_) {}
+      }
+      if (data.customLogoUrl !== undefined) {
+        setCustomLogoUrl(data.customLogoUrl);
+        if (data.customLogoUrl) {
+          try { localStorage.setItem('catchystore_custom_logo', data.customLogoUrl); } catch (_) {}
         }
-      }, (err) => {
-        console.warn('Firestore real-time subscription error:', err);
-      });
+      }
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        setOrders(data.orders);
+        try { localStorage.setItem('auraglow_orders_v2', JSON.stringify(data.orders)); } catch (_) {}
+      }
+    };
+
+    try {
+      // 1. Legacy catalog doc listener
+      unsubs.push(onSnapshot(doc(db, 'store', 'catalog'), (snap) => snap.exists() && handleSync(snap.data())));
+      // 2. Products doc listener
+      unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data())));
+      // 3. Banners doc listener
+      unsubs.push(onSnapshot(doc(db, 'store', 'banners'), (snap) => snap.exists() && handleSync(snap.data())));
+      // 4. Categories doc listener
+      unsubs.push(onSnapshot(doc(db, 'store', 'categories'), (snap) => snap.exists() && handleSync(snap.data())));
+      // 5. Orders doc listener
+      unsubs.push(onSnapshot(doc(db, 'store', 'orders'), (snap) => snap.exists() && handleSync(snap.data())));
     } catch (err) {
-      console.warn('Firestore listener setup failed:', err);
+      console.warn('Firestore real-time subscription error:', err);
     }
 
     return () => {
-      unsubscribe();
+      unsubs.forEach(u => u());
     };
   }, []);
 
@@ -444,8 +477,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (e) {
       console.warn('Could not fetch store data from backend API:', e);
-    } finally {
-      isServerSyncedRef.current = true;
     }
   }, []);
 
@@ -456,10 +487,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleFocus = () => fetchServerStoreData();
     window.addEventListener('focus', handleFocus);
 
-    // Polling interval every 10 seconds for cross-device updates
+    // Polling interval every 5 seconds for cross-device updates
     const pollInterval = setInterval(() => {
       fetchServerStoreData();
-    }, 10000);
+    }, 5000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
@@ -467,11 +498,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [fetchServerStoreData]);
 
+  // Sync Hero Slides to LocalStorage & Server
+  useEffect(() => {
+    try {
+      localStorage.setItem('auraglow_hero_slides', JSON.stringify(heroSlides));
+      pushToServer({ heroSlides });
+    } catch (e) {
+      console.warn('Could not save hero slides:', e);
+    }
+  }, [heroSlides]);
+
   // Sync Hero Banner to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_hero_banner', JSON.stringify(heroBannerConfig));
-      if (isServerSyncedRef.current) pushToServer({ heroBannerConfig });
+      pushToServer({ heroBannerConfig });
     } catch (e) {
       console.warn('Could not save hero banner:', e);
     }
@@ -481,7 +522,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_homepage_banners', JSON.stringify(homepageBanners));
-      if (isServerSyncedRef.current) pushToServer({ homepageBanners });
+      pushToServer({ homepageBanners });
     } catch (e) {
       console.warn('Could not save homepage banners:', e);
     }
@@ -495,7 +536,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         localStorage.removeItem('catchystore_custom_logo');
       }
-      if (isServerSyncedRef.current) pushToServer({ customLogoUrl });
+      pushToServer({ customLogoUrl });
     } catch (e) {
       console.warn('Could not save custom logo:', e);
     }
@@ -505,7 +546,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_products_v2', JSON.stringify(products));
-      if (isServerSyncedRef.current) pushToServer({ products });
+      pushToServer({ products });
     } catch (e) {
       console.warn('Could not save products:', e);
     }
@@ -515,7 +556,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_categories', JSON.stringify(categories));
-      if (isServerSyncedRef.current) pushToServer({ categories });
+      pushToServer({ categories });
     } catch (e) {
       console.warn('Could not save categories:', e);
     }
@@ -525,7 +566,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
-      if (isServerSyncedRef.current) pushToServer({ categoryThumbnails });
+      pushToServer({ categoryThumbnails });
     } catch (e) {
       console.warn('Could not save category thumbnails:', e);
     }
@@ -543,7 +584,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
-      if (isServerSyncedRef.current) pushToServer({ orders });
+      pushToServer({ orders });
     } catch (e) {
       console.warn('Could not save orders:', e);
     }
