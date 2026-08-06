@@ -28,7 +28,8 @@ try {
 
 const saveStoreDataToDisk = (data: Record<string, any>) => {
   try {
-    serverStoreCache = { ...DEFAULT_STORE_DATA, ...serverStoreCache, ...data };
+    const now = Date.now();
+    serverStoreCache = { ...DEFAULT_STORE_DATA, ...serverStoreCache, ...data, _updatedAt: now };
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(serverStoreCache, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Error writing store data to disk:', err);

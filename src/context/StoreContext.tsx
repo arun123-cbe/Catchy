@@ -255,12 +255,61 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     orders?: string;
   }>({});
 
+  const lastLocalMutationTimeRef = React.useRef<number>(0);
+
   const firestoreQuotaExhaustedRef = React.useRef<boolean>(
     typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs_quota_exhausted') === 'true'
   );
 
   // Helper to push updated data to backend Express server & Firebase Firestore safely
   const pushToServer = (dataPayload: Record<string, any>) => {
+    lastLocalMutationTimeRef.current = Date.now();
+
+    // Immediately cache local state signatures so polling GET won't treat them as new server updates
+    if (dataPayload.products !== undefined && Array.isArray(dataPayload.products)) {
+      const serialized = JSON.stringify(dataPayload.products);
+      lastSyncedRef.current.products = serialized;
+      try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
+    }
+    if (dataPayload.categories !== undefined && Array.isArray(dataPayload.categories)) {
+      const serialized = JSON.stringify(dataPayload.categories);
+      lastSyncedRef.current.categories = serialized;
+      try { localStorage.setItem('auraglow_categories', serialized); } catch (_) {}
+    }
+    if (dataPayload.categoryThumbnails !== undefined && typeof dataPayload.categoryThumbnails === 'object') {
+      const serialized = JSON.stringify(dataPayload.categoryThumbnails);
+      lastSyncedRef.current.categoryThumbnails = serialized;
+      try { localStorage.setItem('auraglow_category_thumbnails', serialized); } catch (_) {}
+    }
+    if (dataPayload.heroSlides !== undefined && Array.isArray(dataPayload.heroSlides)) {
+      const serialized = JSON.stringify(dataPayload.heroSlides);
+      lastSyncedRef.current.heroSlides = serialized;
+      try { localStorage.setItem('auraglow_hero_slides', serialized); } catch (_) {}
+    }
+    if (dataPayload.heroBannerConfig !== undefined) {
+      const serialized = JSON.stringify(dataPayload.heroBannerConfig);
+      lastSyncedRef.current.heroBannerConfig = serialized;
+      try { localStorage.setItem('auraglow_hero_banner', serialized); } catch (_) {}
+    }
+    if (dataPayload.homepageBanners !== undefined && Array.isArray(dataPayload.homepageBanners)) {
+      const serialized = JSON.stringify(dataPayload.homepageBanners);
+      lastSyncedRef.current.homepageBanners = serialized;
+      try { localStorage.setItem('auraglow_homepage_banners', serialized); } catch (_) {}
+    }
+    if (dataPayload.customLogoUrl !== undefined) {
+      lastSyncedRef.current.customLogoUrl = dataPayload.customLogoUrl || '';
+      if (dataPayload.customLogoUrl) {
+        try { localStorage.setItem('catchystore_custom_logo', dataPayload.customLogoUrl); } catch (_) {}
+      } else {
+        try { localStorage.removeItem('catchystore_custom_logo'); } catch (_) {}
+      }
+    }
+    if (dataPayload.orders !== undefined && Array.isArray(dataPayload.orders)) {
+      const serialized = JSON.stringify(dataPayload.orders);
+      lastSyncedRef.current.orders = serialized;
+      try { localStorage.setItem('auraglow_orders_v2', serialized); } catch (_) {}
+    }
+
     // 1. Sync with Express backend server (disk storage, zero quota limits)
     fetch('/api/store-data', {
       method: 'POST',
@@ -280,7 +329,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
 
       if (dataPayload.products !== undefined && Array.isArray(dataPayload.products)) {
-        setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true }).catch(handleFsErr);
+        const payloadStr = JSON.stringify({ products: dataPayload.products });
+        if (payloadStr.length < 800000) {
+          setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true }).catch(handleFsErr);
+        }
         dataPayload.products.forEach((p: Product) => {
           if (p && p.id) {
             setDoc(doc(db, 'v2_products', p.id), p, { merge: true }).catch(handleFsErr);
@@ -318,6 +370,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const handleSync = (data: any) => {
       if (!data || typeof data !== 'object') return;
+      // Skip listener override if local mutation happened in the last 3.5 seconds
+      if (Date.now() - lastLocalMutationTimeRef.current < 3500) return;
+
       if (Array.isArray(data.products) && data.products.length > 0) {
         const serialized = JSON.stringify(data.products);
         if (lastSyncedRef.current.products !== serialized) {
@@ -396,6 +451,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
       unsubs.push(onSnapshot(collection(db, 'v2_products'), (snap) => {
         if (snap && !snap.empty) {
+          if (Date.now() - lastLocalMutationTimeRef.current < 3500) return;
           const prodsFromColl = snap.docs.map(d => d.data() as Product);
           if (prodsFromColl.length > 0) {
             const serialized = JSON.stringify(prodsFromColl);
@@ -430,6 +486,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!res.ok) return;
       const data = await res.json();
       
+      // If a local mutation was performed recently (within 3.5s) and server data is older, skip to prevent race conditions
+      const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 3500;
+      if (isRecentLocalMutation && data._updatedAt && data._updatedAt < lastLocalMutationTimeRef.current) {
+        return;
+      }
+
       if (data && typeof data === 'object') {
         if (Array.isArray(data.products) && data.products.length > 0) {
           const serialized = JSON.stringify(data.products);
@@ -653,8 +715,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Sync Orders to LocalStorage & Server
   useEffect(() => {
     try {
-      localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
-      pushToServer({ orders });
+      const serialized = JSON.stringify(orders);
+      if (lastSyncedRef.current.orders === undefined) {
+        lastSyncedRef.current.orders = serialized;
+      } else if (lastSyncedRef.current.orders !== serialized) {
+        lastSyncedRef.current.orders = serialized;
+        localStorage.setItem('auraglow_orders_v2', serialized);
+        pushToServer({ orders });
+      }
     } catch (e) {
       console.warn('Could not save orders:', e);
     }
