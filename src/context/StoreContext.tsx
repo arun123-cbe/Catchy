@@ -693,7 +693,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         lastSyncedRef.current.products = serialized;
       } else if (lastSyncedRef.current.products !== serialized) {
         lastSyncedRef.current.products = serialized;
-        localStorage.setItem('auraglow_products_v2', serialized);
+        try {
+          localStorage.setItem('auraglow_products_v2', serialized);
+        } catch (lsErr) {
+          console.warn('Could not save products to localStorage:', lsErr);
+        }
         pushToServer({ products });
       }
     } catch (e) {
@@ -864,12 +868,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...newProd,
       id: `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
-    setProducts(prev => [created, ...prev]);
+    const nextProducts = [created, ...products];
+    setProducts(nextProducts);
 
     // Auto-add category if not existing
     if (newProd.category && !categories.includes(newProd.category)) {
       setCategories(prev => [...prev, newProd.category]);
     }
+
+    // Direct instant server sync
+    pushToServer({ products: nextProducts });
 
     return created;
   };
@@ -879,36 +887,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...np,
       id: `prod-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`
     }));
-    setProducts(prev => [...createdList, ...prev]);
+    const nextProducts = [...createdList, ...products];
+    setProducts(nextProducts);
 
     // Collect and merge any new categories
     const newCats = Array.from(new Set(newProds.map(p => p.category).filter(Boolean)));
     setCategories(prev => Array.from(new Set([...prev, ...newCats])));
+
+    // Direct instant server sync
+    pushToServer({ products: nextProducts });
   };
 
   const updateProduct = (updated: Product) => {
-    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+    const nextProducts = products.map(p => p.id === updated.id ? updated : p);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const deleteProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
+    const nextProducts = products.filter(p => p.id !== productId);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const updateStock = (productId: string, newStock: number) => {
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p));
+    const nextProducts = products.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   // Bulk Product Operations
   const bulkUpdateProducts = (ids: string[], updates: Partial<Product>) => {
     if (!ids || ids.length === 0) return;
-    setProducts(prev =>
-      prev.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p))
-    );
+    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const bulkDeleteProducts = (ids: string[]) => {
     if (!ids || ids.length === 0) return;
-    setProducts(prev => prev.filter(p => !ids.includes(p.id)));
+    const nextProducts = products.filter(p => !ids.includes(p.id));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const bulkUpdateCategoryForProducts = (ids: string[], categoryName: string) => {
@@ -917,9 +937,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!categories.includes(categoryName)) {
       setCategories(prev => [...prev, categoryName]);
     }
-    setProducts(prev =>
-      prev.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p))
-    );
+    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   // Banner Actions

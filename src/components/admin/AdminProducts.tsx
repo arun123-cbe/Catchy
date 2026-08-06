@@ -117,8 +117,8 @@ export const AdminProducts: React.FC = () => {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const maxWidth = 1000;
-          const maxHeight = 1000;
+          const maxWidth = 800;
+          const maxHeight = 800;
           let width = img.width;
           let height = img.height;
 
@@ -140,7 +140,7 @@ export const AdminProducts: React.FC = () => {
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.82));
+          resolve(canvas.toDataURL('image/jpeg', 0.78));
         };
         img.onerror = () => resolve(e.target?.result as string);
         img.src = e.target?.result as string;

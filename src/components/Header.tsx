@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShoppingBag, Sparkles, Search, LayoutDashboard, Leaf, Tag, Flame, Compass, Menu as MenuIcon, X, ChevronDown, Grid, Truck } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { CatchyStoreLogo } from './CatchyStoreLogo';
+import { PredictiveSearch } from './PredictiveSearch';
 
 export const Header: React.FC<{ onOpenQuiz: () => void; onOpenTracking?: () => void }> = ({ onOpenQuiz, onOpenTracking }) => {
   const {
@@ -68,18 +69,9 @@ export const Header: React.FC<{ onOpenQuiz: () => void; onOpenTracking?: () => v
             <CatchyStoreLogo size="md" />
           </div>
 
-          {/* Desktop Search Bar */}
+          {/* Desktop Search Bar with Predictive Live Search */}
           <div className="flex-1 max-w-sm hidden md:block">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input
-                type="text"
-                placeholder="Search beauty formulas, skincare, ingredients..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-stone-100/80 border border-stone-200 rounded-full pl-9 pr-4 py-2 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:bg-white transition-all"
-              />
-            </div>
+            <PredictiveSearch />
           </div>
 
           {/* Actions: Cart, Track Order, Quiz & Admin Toggle */}
@@ -244,16 +236,9 @@ export const Header: React.FC<{ onOpenQuiz: () => void; onOpenTracking?: () => v
       {/* Mobile Drawer Navigation Menu */}
       {isMobileMenuOpen && (
         <div className="lg:hidden bg-white border-b border-stone-200 p-4 space-y-4 animate-fade-in shadow-lg">
-          {/* Mobile Search */}
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-stone-100 border border-stone-200 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-800"
-            />
+          {/* Mobile Predictive Live Search */}
+          <div>
+            <PredictiveSearch isMobile onCloseMobileMenu={() => setIsMobileMenuOpen(false)} />
           </div>
 
           {/* Mobile Menu Categories */}

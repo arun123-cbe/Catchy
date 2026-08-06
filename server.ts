@@ -14,7 +14,8 @@ let serverStoreCache: Record<string, any> = {};
 try {
   if (fs.existsSync(DATA_FILE_PATH)) {
     const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-    serverStoreCache = JSON.parse(raw);
+    const diskData = JSON.parse(raw);
+    serverStoreCache = { ...DEFAULT_STORE_DATA, ...diskData };
     console.log('Successfully loaded persistent store data from disk.');
   } else {
     serverStoreCache = DEFAULT_STORE_DATA;
@@ -27,7 +28,7 @@ try {
 
 const saveStoreDataToDisk = (data: Record<string, any>) => {
   try {
-    serverStoreCache = { ...serverStoreCache, ...data };
+    serverStoreCache = { ...DEFAULT_STORE_DATA, ...serverStoreCache, ...data };
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(serverStoreCache, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Error writing store data to disk:', err);
