@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2, Image as ImageIcon, Sparkles, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2, Image as ImageIcon, Sparkles, RefreshCw, Wifi } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { AdminInventory } from './admin/AdminInventory';
@@ -174,9 +174,20 @@ export const AdminPortal: React.FC = () => {
       {/* Top Banner */}
       <div className="bg-stone-900 text-stone-100 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-stone-800 shadow-xl">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>Authenticated Admin Session</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Authenticated Admin Session</span>
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold" title="Database connection synchronized in real-time across all devices">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
+              <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Database: Live</span>
+            </div>
           </div>
           <h1 className="text-2xl md:text-3xl font-bold font-serif text-white">
             CatchyStore Backoffice Admin
