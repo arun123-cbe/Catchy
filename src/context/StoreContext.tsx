@@ -370,8 +370,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const handleSync = (data: any) => {
       if (!data || typeof data !== 'object') return;
-      // Skip listener override if local mutation happened in the last 3.5 seconds
-      if (Date.now() - lastLocalMutationTimeRef.current < 3500) return;
+      // Skip listener override if local mutation happened in the last 15 seconds
+      if (Date.now() - lastLocalMutationTimeRef.current < 15000) return;
 
       if (Array.isArray(data.products) && data.products.length > 0) {
         const serialized = JSON.stringify(data.products);
@@ -451,7 +451,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
       unsubs.push(onSnapshot(collection(db, 'v2_products'), (snap) => {
         if (snap && !snap.empty) {
-          if (Date.now() - lastLocalMutationTimeRef.current < 3500) return;
+          if (Date.now() - lastLocalMutationTimeRef.current < 15000) return;
           const prodsFromColl = snap.docs.map(d => d.data() as Product);
           if (prodsFromColl.length > 0) {
             const serialized = JSON.stringify(prodsFromColl);
@@ -486,14 +486,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!res.ok) return;
       const data = await res.json();
       
-      // If a local mutation was performed recently (within 3.5s) and server data is older, skip to prevent race conditions
-      const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 3500;
-      if (isRecentLocalMutation && data._updatedAt && data._updatedAt < lastLocalMutationTimeRef.current) {
-        return;
-      }
+      // If a local mutation was performed recently (within 15s), ignore server products override to prevent race conditions
+      const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 15000;
 
       if (data && typeof data === 'object') {
-        if (Array.isArray(data.products) && data.products.length > 0) {
+        if (!isRecentLocalMutation && Array.isArray(data.products) && data.products.length > 0) {
           const serialized = JSON.stringify(data.products);
           if (lastSyncedRef.current.products !== serialized) {
             lastSyncedRef.current.products = serialized;
@@ -841,16 +838,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...newProd,
       id: `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
-    const nextProducts = [created, ...products];
-    setProducts(nextProducts);
 
-    // Auto-add category if not existing
+    setProducts(prev => {
+      const nextProducts = [created, ...prev];
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
+
     if (newProd.category && !categories.includes(newProd.category)) {
       setCategories(prev => [...prev, newProd.category]);
     }
-
-    // Direct instant server sync
-    pushToServer({ products: nextProducts });
 
     return created;
   };
@@ -860,63 +857,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...np,
       id: `prod-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`
     }));
-    const nextProducts = [...createdList, ...products];
-    setProducts(nextProducts);
 
-    // Collect and merge any new categories
+    setProducts(prev => {
+      const nextProducts = [...createdList, ...prev];
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
+
     const newCats = Array.from(new Set(newProds.map(p => p.category).filter(Boolean)));
     setCategories(prev => Array.from(new Set([...prev, ...newCats])));
-
-    // Direct instant server sync
-    pushToServer({ products: nextProducts });
   };
 
   const updateProduct = (updated: Product) => {
-    const nextProducts = products.map(p => p.id === updated.id ? updated : p);
-    setProducts(nextProducts);
-    pushToServer({ products: nextProducts });
+    setProducts(prev => {
+      const nextProducts = prev.map(p => p.id === updated.id ? updated : p);
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
   };
 
   const deleteProduct = (productId: string) => {
-    const nextProducts = products.filter(p => p.id !== productId);
-    setProducts(nextProducts);
+    setProducts(prev => {
+      const nextProducts = prev.filter(p => p.id !== productId);
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
     deleteDoc(doc(db, 'v2_products', productId)).catch(() => {});
-    pushToServer({ products: nextProducts });
   };
 
   const updateStock = (productId: string, newStock: number) => {
-    const nextProducts = products.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p);
-    setProducts(nextProducts);
-    pushToServer({ products: nextProducts });
+    setProducts(prev => {
+      const nextProducts = prev.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p);
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
   };
 
   // Bulk Product Operations
   const bulkUpdateProducts = (ids: string[], updates: Partial<Product>) => {
     if (!ids || ids.length === 0) return;
-    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p));
-    setProducts(nextProducts);
-    pushToServer({ products: nextProducts });
+    setProducts(prev => {
+      const nextProducts = prev.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p));
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
   };
 
   const bulkDeleteProducts = (ids: string[]) => {
     if (!ids || ids.length === 0) return;
-    const nextProducts = products.filter(p => !ids.includes(p.id));
-    setProducts(nextProducts);
+    setProducts(prev => {
+      const nextProducts = prev.filter(p => !ids.includes(p.id));
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
     ids.forEach(id => {
       deleteDoc(doc(db, 'v2_products', id)).catch(() => {});
     });
-    pushToServer({ products: nextProducts });
   };
 
   const bulkUpdateCategoryForProducts = (ids: string[], categoryName: string) => {
     if (!ids || ids.length === 0 || !categoryName) return;
-    // Ensure category exists
     if (!categories.includes(categoryName)) {
       setCategories(prev => [...prev, categoryName]);
     }
-    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p));
-    setProducts(nextProducts);
-    pushToServer({ products: nextProducts });
+    setProducts(prev => {
+      const nextProducts = prev.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p));
+      pushToServer({ products: nextProducts });
+      return nextProducts;
+    });
   };
 
   // Banner Actions
