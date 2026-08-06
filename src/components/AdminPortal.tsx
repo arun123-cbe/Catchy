@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, FolderPlus, BarChart2, ShieldCheck, ArrowLeft, Lock, Unlock, Eye, EyeOff, KeyRound, AlertCircle, LogOut, CheckCircle2, Image as ImageIcon, Sparkles, RefreshCw } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { AdminInventory } from './admin/AdminInventory';
@@ -10,7 +10,7 @@ import { AdminHomepageBanners } from './admin/AdminHomepageBanners';
 
 
 export const AdminPortal: React.FC = () => {
-  const { adminSubTab, setAdminSubTab, setActiveView, products } = useStore();
+  const { adminSubTab, setAdminSubTab, setActiveView, products, resetStoreData } = useStore();
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -26,6 +26,11 @@ export const AdminPortal: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changeSuccess, setChangeSuccess] = useState('');
+
+  // Reset Confirmation State
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
 
   const getSavedPassword = () => {
     return localStorage.getItem('catchy_admin_password') || 'admin123';
@@ -183,6 +188,15 @@ export const AdminPortal: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setIsResetConfirmOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1.5"
+            title="Clear all custom store data and restore preloaded images"
+          >
+            <RefreshCw className="w-4 h-4 text-amber-400" />
+            <span>Reset Data to Preloaded Images</span>
+          </button>
+
+          <button
             onClick={() => setIsChangingPassword(!isChangingPassword)}
             className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5"
             title="Change Security Password"
@@ -209,6 +223,60 @@ export const AdminPortal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 bg-stone-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 space-y-5 text-center relative overflow-hidden">
+            <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <RefreshCw className={`w-7 h-7 ${isResetting ? 'animate-spin' : ''}`} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold font-serif text-stone-900">
+                Clear All Store Data?
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                This will reset all products, categories, hero banners, and orders back to the <strong>clean preloaded catalog with high-res preloaded Unsplash images</strong>, removing any custom uploaded data.
+              </p>
+            </div>
+
+            {resetMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> {resetMessage}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                disabled={isResetting}
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="flex-1 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-2xl transition-all"
+              >
+                Cancel
+              </button>
+
+              <button
+                disabled={isResetting}
+                onClick={async () => {
+                  setIsResetting(true);
+                  await resetStoreData();
+                  setResetMessage('Store data cleared successfully! Preloaded images & products restored.');
+                  setTimeout(() => {
+                    setIsResetting(false);
+                    setIsResetConfirmOpen(false);
+                    setResetMessage('');
+                  }, 1200);
+                }}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-2xl transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                {isResetting ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                <span>Yes, Reset to Defaults</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Change Password Modal / Card Overlay */}
       {isChangingPassword && (

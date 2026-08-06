@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, Order, OrderStatus, HeroBannerConfig, DisplayBanner, HeroSlide } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_ORDERS } from '../data/initialData';
+import {
+  INITIAL_PRODUCTS,
+  INITIAL_ORDERS,
+  DEFAULT_HERO_SLIDES,
+  DEFAULT_HERO_BANNER,
+  DEFAULT_DISPLAY_BANNERS,
+  DEFAULT_CATEGORY_THUMBNAILS,
+  DEFAULT_CATEGORIES
+} from '../data/defaultStoreData';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
@@ -77,6 +85,9 @@ interface StoreContextType {
   // Selected product for modal view
   selectedProductForModal: Product | null;
   setSelectedProductForModal: (p: Product | null) => void;
+
+  // Reset store data to preloaded initial state
+  resetStoreData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -941,6 +952,64 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
+  const resetStoreData = React.useCallback(async () => {
+    try {
+      localStorage.removeItem('auraglow_products_v2');
+      localStorage.removeItem('auraglow_categories');
+      localStorage.removeItem('auraglow_category_thumbnails');
+      localStorage.removeItem('auraglow_hero_slides');
+      localStorage.removeItem('auraglow_hero_banner');
+      localStorage.removeItem('auraglow_homepage_banners');
+      localStorage.removeItem('catchystore_custom_logo');
+      localStorage.removeItem('auraglow_orders_v2');
+      localStorage.removeItem('auraglow_cart_v2');
+
+      setProducts(INITIAL_PRODUCTS);
+      setCategories(DEFAULT_CATEGORIES);
+      setCategoryThumbnails(DEFAULT_CATEGORY_THUMBNAILS);
+      setHeroSlides(DEFAULT_HERO_SLIDES);
+      setHeroBannerConfig(DEFAULT_HERO_BANNER);
+      setHomepageBanners(DEFAULT_DISPLAY_BANNERS);
+      setCustomLogoUrl(null);
+      setOrders(INITIAL_ORDERS);
+      setCart([]);
+
+      lastSyncedRef.current = {
+        products: JSON.stringify(INITIAL_PRODUCTS),
+        categories: JSON.stringify(DEFAULT_CATEGORIES),
+        categoryThumbnails: JSON.stringify(DEFAULT_CATEGORY_THUMBNAILS),
+        heroSlides: JSON.stringify(DEFAULT_HERO_SLIDES),
+        heroBannerConfig: JSON.stringify(DEFAULT_HERO_BANNER),
+        homepageBanners: JSON.stringify(DEFAULT_DISPLAY_BANNERS),
+        customLogoUrl: '',
+        orders: JSON.stringify(INITIAL_ORDERS)
+      };
+
+      await fetch('/api/store-data/reset', { method: 'POST' });
+
+      if (db) {
+        try {
+          const docRef = doc(db, 'store', 'currentData');
+          await setDoc(docRef, {
+            products: INITIAL_PRODUCTS,
+            categories: DEFAULT_CATEGORIES,
+            categoryThumbnails: DEFAULT_CATEGORY_THUMBNAILS,
+            heroSlides: DEFAULT_HERO_SLIDES,
+            heroBannerConfig: DEFAULT_HERO_BANNER,
+            homepageBanners: DEFAULT_DISPLAY_BANNERS,
+            customLogoUrl: null,
+            orders: INITIAL_ORDERS,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) {
+          console.warn('Firestore reset optional sync error:', e);
+        }
+      }
+    } catch (err) {
+      console.error('Error resetting store data:', err);
+    }
+  }, []);
+
   return (
     <StoreContext.Provider
       value={{
@@ -997,7 +1066,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         customLogoUrl,
         setCustomLogoUrl,
         selectedProductForModal,
-        setSelectedProductForModal
+        setSelectedProductForModal,
+        resetStoreData
       }}
     >
       {children}

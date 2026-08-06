@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import { DEFAULT_STORE_DATA } from './src/data/defaultStoreData';
 
 // Store Data File Path for persistent storage across devices
 const DATA_FILE_PATH = path.join(process.cwd(), 'store_data.json');
@@ -15,9 +16,13 @@ try {
     const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
     serverStoreCache = JSON.parse(raw);
     console.log('Successfully loaded persistent store data from disk.');
+  } else {
+    serverStoreCache = DEFAULT_STORE_DATA;
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(DEFAULT_STORE_DATA, null, 2), 'utf-8');
   }
 } catch (err) {
   console.warn('Could not read persistent store_data.json file, initializing clean state:', err);
+  serverStoreCache = DEFAULT_STORE_DATA;
 }
 
 const saveStoreDataToDisk = (data: Record<string, any>) => {
@@ -82,6 +87,16 @@ async function startServer() {
       res.json({ success: true, timestamp: new Date().toISOString() });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to persist store data', details: err?.message });
+    }
+  });
+
+  app.post('/api/store-data/reset', (req, res) => {
+    try {
+      serverStoreCache = JSON.parse(JSON.stringify(DEFAULT_STORE_DATA));
+      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(serverStoreCache, null, 2), 'utf-8');
+      res.json({ success: true, storeData: serverStoreCache });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to reset store data', details: err?.message });
     }
   });
 
