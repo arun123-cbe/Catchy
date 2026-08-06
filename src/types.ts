@@ -22,6 +22,8 @@ export interface Product {
   isNewArrival?: boolean;
   isOrganic?: boolean;
   isSuperSaver?: boolean;
+  isMostlyBought?: boolean;
+  isCustomersFavorite?: boolean;
   concernsHandled: string[]; // e.g. ["Dry Skin", "Anti-Aging", "Sleep"]
 }
 

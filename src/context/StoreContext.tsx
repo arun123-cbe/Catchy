@@ -339,25 +339,96 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('catchystore_custom_logo') || null;
   });
 
-  // Sync Hero Banner to LocalStorage
+  // Helper to push updated data to backend Express server
+  const pushToServer = (dataPayload: Record<string, any>) => {
+    fetch('/api/store-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dataPayload)
+    }).catch(err => console.warn('Server sync error:', err));
+  };
+
+  // Flag to prevent overwriting server state before initial fetch
+  const isServerSyncedRef = React.useRef(false);
+
+  const fetchServerStoreData = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/store-data');
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data.products) && data.products.length > 0) {
+          setProducts(data.products);
+        }
+        if (Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategories(data.categories);
+        }
+        if (data.categoryThumbnails && typeof data.categoryThumbnails === 'object') {
+          setCategoryThumbnails(prev => ({ ...prev, ...data.categoryThumbnails }));
+        }
+        if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
+          setHeroSlides(data.heroSlides);
+        }
+        if (data.heroBannerConfig) {
+          setHeroBannerConfig(prev => ({ ...prev, ...data.heroBannerConfig }));
+        }
+        if (Array.isArray(data.homepageBanners) && data.homepageBanners.length > 0) {
+          setHomepageBanners(data.homepageBanners);
+        }
+        if (data.customLogoUrl !== undefined) {
+          setCustomLogoUrl(data.customLogoUrl);
+        }
+        if (Array.isArray(data.orders) && data.orders.length > 0) {
+          setOrders(data.orders);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch store data from backend API:', e);
+    } finally {
+      isServerSyncedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServerStoreData();
+
+    // Re-fetch when switching back to tab
+    const handleFocus = () => fetchServerStoreData();
+    window.addEventListener('focus', handleFocus);
+
+    // Polling interval every 10 seconds for cross-device updates
+    const pollInterval = setInterval(() => {
+      fetchServerStoreData();
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
+    };
+  }, [fetchServerStoreData]);
+
+  // Sync Hero Banner to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_hero_banner', JSON.stringify(heroBannerConfig));
+      if (isServerSyncedRef.current) pushToServer({ heroBannerConfig });
     } catch (e) {
-      console.warn('Could not save hero banner to localStorage:', e);
+      console.warn('Could not save hero banner:', e);
     }
   }, [heroBannerConfig]);
 
-  // Sync Display Banners to LocalStorage
+  // Sync Display Banners to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_homepage_banners', JSON.stringify(homepageBanners));
+      if (isServerSyncedRef.current) pushToServer({ homepageBanners });
     } catch (e) {
-      console.warn('Could not save homepage banners to localStorage:', e);
+      console.warn('Could not save homepage banners:', e);
     }
   }, [homepageBanners]);
 
-  // Sync to LocalStorage
+  // Sync Custom Logo to LocalStorage & Server
   useEffect(() => {
     try {
       if (customLogoUrl) {
@@ -365,32 +436,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         localStorage.removeItem('catchystore_custom_logo');
       }
+      if (isServerSyncedRef.current) pushToServer({ customLogoUrl });
     } catch (e) {
-      console.warn('Could not save custom logo to localStorage:', e);
+      console.warn('Could not save custom logo:', e);
     }
   }, [customLogoUrl]);
 
+  // Sync Products to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_products_v2', JSON.stringify(products));
+      if (isServerSyncedRef.current) pushToServer({ products });
     } catch (e) {
-      console.warn('Could not save products to localStorage:', e);
+      console.warn('Could not save products:', e);
     }
   }, [products]);
 
+  // Sync Categories to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_categories', JSON.stringify(categories));
+      if (isServerSyncedRef.current) pushToServer({ categories });
     } catch (e) {
-      console.warn('Could not save categories to localStorage:', e);
+      console.warn('Could not save categories:', e);
     }
   }, [categories]);
 
+  // Sync Category Thumbnails to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_category_thumbnails', JSON.stringify(categoryThumbnails));
+      if (isServerSyncedRef.current) pushToServer({ categoryThumbnails });
     } catch (e) {
-      console.warn('Could not save category thumbnails to localStorage:', e);
+      console.warn('Could not save category thumbnails:', e);
     }
   }, [categoryThumbnails]);
 
@@ -398,15 +476,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       localStorage.setItem('auraglow_cart_v2', JSON.stringify(cart));
     } catch (e) {
-      console.warn('Could not save cart to localStorage:', e);
+      console.warn('Could not save cart:', e);
     }
   }, [cart]);
 
+  // Sync Orders to LocalStorage & Server
   useEffect(() => {
     try {
       localStorage.setItem('auraglow_orders_v2', JSON.stringify(orders));
+      if (isServerSyncedRef.current) pushToServer({ orders });
     } catch (e) {
-      console.warn('Could not save orders to localStorage:', e);
+      console.warn('Could not save orders:', e);
     }
   }, [orders]);
 

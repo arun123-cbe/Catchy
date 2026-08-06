@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, X, Upload, FileText, Check, Sparkles, Flame, Leaf, Tag, CheckCircle2, Image as ImageIcon, Download, CheckSquare, Square, Layers, Percent, ArrowRight, Grid, Table } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, Upload, FileText, Check, Sparkles, Flame, Leaf, Tag, CheckCircle2, Image as ImageIcon, Download, CheckSquare, Square, Layers, Percent, ArrowRight, Grid, Table, ShoppingBag, Heart, Filter, DollarSign, Star, TrendingUp } from 'lucide-react';
 import Papa from 'papaparse';
 import { useStore } from '../../context/StoreContext';
 import { Product } from '../../types';
@@ -25,6 +25,9 @@ export const AdminProducts: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | 'All'>('All');
+  const [selectedTagFilter, setSelectedTagFilter] = useState<'All' | 'New Arrivals' | 'Best Sellers' | 'Mostly Buyed' | 'Customers Favorite' | 'Organic' | 'Super Saver'>('All');
+  const [selectedPriceFilter, setSelectedPriceFilter] = useState<'All' | 'under-500' | '500-999' | '1000-1999' | '2000-plus'>('All');
+
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -65,6 +68,8 @@ export const AdminProducts: React.FC = () => {
     isNewArrival: true,
     isOrganic: true,
     isSuperSaver: false,
+    isMostlyBought: false,
+    isCustomersFavorite: false,
     stock: 50,
     reorderPoint: 15,
     sku: 'AG-PROD-001',
@@ -76,9 +81,33 @@ export const AdminProducts: React.FC = () => {
   const [concernsInput, setConcernsInput] = useState('Dullness, Dry Skin');
 
   const filtered = products.filter(p => {
+    // 1. Shop by Category
     const matchesCat = selectedCategoryFilter === 'All' || p.category === selectedCategoryFilter;
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
-    return matchesCat && matchesSearch;
+
+    // 2. Search filter
+    const q = search.trim().toLowerCase();
+    const matchesSearch = !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q) ||
+      (p.specialities && p.specialities.some(s => s.toLowerCase().includes(q)));
+
+    // 3. Collection filter (New Arrivals, Best Sellers, Mostly Buyed, Customers Favorite, etc.)
+    let matchesTag = true;
+    if (selectedTagFilter === 'New Arrivals') matchesTag = !!p.isNewArrival;
+    else if (selectedTagFilter === 'Best Sellers') matchesTag = !!p.isBestSeller;
+    else if (selectedTagFilter === 'Mostly Buyed') matchesTag = !!p.isMostlyBought;
+    else if (selectedTagFilter === 'Customers Favorite') matchesTag = !!p.isCustomersFavorite;
+    else if (selectedTagFilter === 'Organic') matchesTag = !!p.isOrganic;
+    else if (selectedTagFilter === 'Super Saver') matchesTag = !!p.isSuperSaver;
+
+    // 4. Shop by Price filter
+    let matchesPrice = true;
+    if (selectedPriceFilter === 'under-500') matchesPrice = p.price < 500;
+    else if (selectedPriceFilter === '500-999') matchesPrice = p.price >= 500 && p.price <= 999;
+    else if (selectedPriceFilter === '1000-1999') matchesPrice = p.price >= 1000 && p.price <= 1999;
+    else if (selectedPriceFilter === '2000-plus') matchesPrice = p.price >= 2000;
+
+    return matchesCat && matchesSearch && matchesTag && matchesPrice;
   });
 
   // Helper to compress product images using Canvas
@@ -152,6 +181,8 @@ export const AdminProducts: React.FC = () => {
       isNewArrival: true,
       isOrganic: true,
       isSuperSaver: false,
+      isMostlyBought: false,
+      isCustomersFavorite: false,
       stock: 40,
       reorderPoint: 10,
       sku: newSku,
@@ -218,6 +249,8 @@ export const AdminProducts: React.FC = () => {
           isNewArrival: row.isNewArrival === 'true' || row.isNewArrival === '1' || row.isNewArrival === 'TRUE',
           isOrganic: row.isOrganic === 'true' || row.isOrganic === '1' || row.isOrganic === 'TRUE',
           isSuperSaver: row.isSuperSaver === 'true' || row.isSuperSaver === '1' || row.isSuperSaver === 'TRUE',
+          isMostlyBought: row.isMostlyBought === 'true' || row.isMostlyBought === '1' || row.isMostlyBought === 'TRUE',
+          isCustomersFavorite: row.isCustomersFavorite === 'true' || row.isCustomersFavorite === '1' || row.isCustomersFavorite === 'TRUE',
           stock: parseInt(row.stock) || 50,
           reorderPoint: parseInt(row.reorderPoint) || 10,
           sku: row.sku || `BULK-${Date.now()}-${idx}`,
@@ -373,7 +406,7 @@ export const AdminProducts: React.FC = () => {
   };
 
   // Bulk Badge Update
-  const handleApplyBulkBadge = (badgeField: 'isBestSeller' | 'isNewArrival' | 'isOrganic' | 'isSuperSaver', value: boolean) => {
+  const handleApplyBulkBadge = (badgeField: 'isBestSeller' | 'isNewArrival' | 'isOrganic' | 'isSuperSaver' | 'isMostlyBought' | 'isCustomersFavorite', value: boolean) => {
     if (selectedProductIds.length === 0) return;
     bulkUpdateProducts(selectedProductIds, { [badgeField]: value });
     setBulkSuccessMsg(`Updated ${badgeField} flag for ${selectedProductIds.length} items!`);
@@ -409,7 +442,7 @@ export const AdminProducts: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-stone-900 font-serif">Product Catalog Management</h2>
-          <p className="text-xs text-stone-500">Add products, bulk edit categories & prices, set specialities, or bulk import via CSV/Excel</p>
+          <p className="text-xs text-stone-500">Add products, bulk edit categories & prices, filter by collections, or bulk import via CSV/Excel</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -470,31 +503,141 @@ export const AdminProducts: React.FC = () => {
         </div>
       )}
 
-      {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-4 rounded-2xl border border-stone-200">
-        <div className="relative flex-1 max-w-sm w-full">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Search title, SKU or specialty..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-800 focus:outline-none"
-          />
+      {/* Quick Filter & Collection Control Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-stone-200 space-y-3.5 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+          <div className="relative flex-1 max-w-md w-full">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Search title, SKU or specialty..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-stone-500 font-bold self-end sm:self-auto">
+            <span>Showing {filtered.length} of {products.length} Products</span>
+            {(selectedCategoryFilter !== 'All' || selectedTagFilter !== 'All' || selectedPriceFilter !== 'All' || search) && (
+              <button
+                onClick={() => {
+                  setSelectedCategoryFilter('All');
+                  setSelectedTagFilter('All');
+                  setSelectedPriceFilter('All');
+                  setSearch('');
+                }}
+                className="text-xs text-rose-600 hover:underline font-bold flex items-center gap-1 ml-2"
+              >
+                <X className="w-3.5 h-3.5" /> Reset Filters
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto">
-          {(['All', ...categories] as const).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-                selectedCategoryFilter === cat ? 'bg-stone-900 text-white shadow-xs' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-              }`}
+        {/* Filter Controls Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          
+          {/* 1. Shop by Category */}
+          <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-stone-600" /> Shop by Category
+            </span>
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-bold focus:outline-none"
             >
-              {cat}
-            </button>
-          ))}
+              <option value="All">All Categories ({products.length})</option>
+              {categories.map(c => {
+                const count = products.filter(p => p.category === c).length;
+                return <option key={`cat-opt-${c}`} value={c}>{c} ({count})</option>;
+              })}
+            </select>
+          </div>
+
+          {/* 2. Collection Filters (New Arrivals, Best Sellers, Mostly Buyed, Customers Favorite) */}
+          <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Collection Badges
+            </span>
+            <select
+              value={selectedTagFilter}
+              onChange={(e) => setSelectedTagFilter(e.target.value as any)}
+              className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-bold focus:outline-none"
+            >
+              <option value="All">All Items</option>
+              <option value="New Arrivals">✨ New Arrivals ({products.filter(p => p.isNewArrival).length})</option>
+              <option value="Best Sellers">🔥 Best Sellers ({products.filter(p => p.isBestSeller).length})</option>
+              <option value="Mostly Buyed">🛍️ Mostly Buyed ({products.filter(p => p.isMostlyBought).length})</option>
+              <option value="Customers Favorite">❤️ Customers Favorite ({products.filter(p => p.isCustomersFavorite).length})</option>
+              <option value="Organic">🌿 100% Organic ({products.filter(p => p.isOrganic).length})</option>
+              <option value="Super Saver">🏷️ Super Saver ({products.filter(p => p.isSuperSaver).length})</option>
+            </select>
+          </div>
+
+          {/* 3. Shop by Price */}
+          <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Shop by Price
+            </span>
+            <select
+              value={selectedPriceFilter}
+              onChange={(e) => setSelectedPriceFilter(e.target.value as any)}
+              className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 font-bold focus:outline-none"
+            >
+              <option value="All">All Prices</option>
+              <option value="under-500">Under ₹500 ({products.filter(p => p.price < 500).length})</option>
+              <option value="500-999">₹500 - ₹999 ({products.filter(p => p.price >= 500 && p.price <= 999).length})</option>
+              <option value="1000-1999">₹1000 - ₹1999 ({products.filter(p => p.price >= 1000 && p.price <= 1999).length})</option>
+              <option value="2000-plus">₹2000 and above ({products.filter(p => p.price >= 2000).length})</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Quick Click Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-1 text-xs">
+          <span className="text-[10px] text-stone-400 font-bold uppercase shrink-0">Quick Views:</span>
+          <button
+            onClick={() => setSelectedTagFilter('All')}
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+              selectedTagFilter === 'All' ? 'bg-stone-900 text-white shadow-xs' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            All Products
+          </button>
+          <button
+            onClick={() => setSelectedTagFilter('New Arrivals')}
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+              selectedTagFilter === 'New Arrivals' ? 'bg-purple-900 text-white shadow-xs' : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-purple-500" /> New Arrivals
+          </button>
+          <button
+            onClick={() => setSelectedTagFilter('Best Sellers')}
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+              selectedTagFilter === 'Best Sellers' ? 'bg-amber-900 text-white shadow-xs' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+            }`}
+          >
+            <Flame className="w-3 h-3 text-amber-500" /> Best Sellers
+          </button>
+          <button
+            onClick={() => setSelectedTagFilter('Mostly Buyed')}
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+              selectedTagFilter === 'Mostly Buyed' ? 'bg-indigo-900 text-white shadow-xs' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+            }`}
+          >
+            <ShoppingBag className="w-3 h-3 text-indigo-500" /> Mostly Buyed
+          </button>
+          <button
+            onClick={() => setSelectedTagFilter('Customers Favorite')}
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+              selectedTagFilter === 'Customers Favorite' ? 'bg-rose-900 text-white shadow-xs' : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+            }`}
+          >
+            <Heart className="w-3 h-3 text-rose-500" /> Customers Favorite
+          </button>
         </div>
       </div>
 
@@ -595,19 +738,31 @@ export const AdminProducts: React.FC = () => {
               <span className="text-[10px] font-bold text-stone-400 uppercase">Set Badges:</span>
               <button
                 onClick={() => handleApplyBulkBadge('isBestSeller', true)}
-                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-500/30"
+                className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-500/30"
               >
                 + Best Seller
               </button>
               <button
                 onClick={() => handleApplyBulkBadge('isNewArrival', true)}
-                className="px-2.5 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-bold border border-indigo-500/30"
+                className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg text-[10px] font-bold border border-purple-500/30"
               >
                 + New Arrival
               </button>
               <button
+                onClick={() => handleApplyBulkBadge('isMostlyBought', true)}
+                className="px-2 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-bold border border-indigo-500/30"
+              >
+                + Mostly Buyed
+              </button>
+              <button
+                onClick={() => handleApplyBulkBadge('isCustomersFavorite', true)}
+                className="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-lg text-[10px] font-bold border border-rose-500/30"
+              >
+                + Customers Favorite
+              </button>
+              <button
                 onClick={() => handleApplyBulkBadge('isOrganic', true)}
-                className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[10px] font-bold border border-emerald-500/30"
+                className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[10px] font-bold border border-emerald-500/30"
               >
                 + 100% Organic
               </button>
@@ -700,9 +855,24 @@ export const AdminProducts: React.FC = () => {
                               <Flame className="w-2.5 h-2.5 text-amber-600 fill-amber-600" /> Best Seller
                             </span>
                           )}
-                          {prod.isSuperSaver && (
+                          {prod.isNewArrival && (
+                            <span className="bg-purple-100 text-purple-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Sparkles className="w-2.5 h-2.5 text-purple-600" /> New Arrival
+                            </span>
+                          )}
+                          {prod.isMostlyBought && (
+                            <span className="bg-indigo-100 text-indigo-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <ShoppingBag className="w-2.5 h-2.5 text-indigo-600" /> Mostly Buyed
+                            </span>
+                          )}
+                          {prod.isCustomersFavorite && (
                             <span className="bg-rose-100 text-rose-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                              <Tag className="w-2.5 h-2.5 text-rose-600" /> Super Saver
+                              <Heart className="w-2.5 h-2.5 text-rose-600 fill-rose-600" /> Customers Favorite
+                            </span>
+                          )}
+                          {prod.isSuperSaver && (
+                            <span className="bg-teal-100 text-teal-900 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Tag className="w-2.5 h-2.5 text-teal-600" /> Super Saver
                             </span>
                           )}
                           {(prod.specialities || []).slice(0, 2).map((s, i) => (
@@ -1024,7 +1194,7 @@ export const AdminProducts: React.FC = () => {
               {/* Badge Toggles */}
               <div className="bg-stone-100 p-3 rounded-2xl border border-stone-200">
                 <span className="block font-bold text-stone-700 uppercase mb-2">Collection Badge Tags</span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <label className={`p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer text-[11px] font-bold transition-all ${
                     formData.isBestSeller ? 'bg-amber-100 border-amber-400 text-amber-900' : 'bg-white border-stone-200'
                   }`}>
@@ -1050,6 +1220,30 @@ export const AdminProducts: React.FC = () => {
                   </label>
 
                   <label className={`p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer text-[11px] font-bold transition-all ${
+                    formData.isMostlyBought ? 'bg-indigo-100 border-indigo-400 text-indigo-900' : 'bg-white border-stone-200'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isMostlyBought || false}
+                      onChange={(e) => setFormData({ ...formData, isMostlyBought: e.target.checked })}
+                      className="hidden"
+                    />
+                    <ShoppingBag className="w-3.5 h-3.5 text-indigo-600" /> Mostly Buyed
+                  </label>
+
+                  <label className={`p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer text-[11px] font-bold transition-all ${
+                    formData.isCustomersFavorite ? 'bg-rose-100 border-rose-400 text-rose-900' : 'bg-white border-stone-200'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isCustomersFavorite || false}
+                      onChange={(e) => setFormData({ ...formData, isCustomersFavorite: e.target.checked })}
+                      className="hidden"
+                    />
+                    <Heart className="w-3.5 h-3.5 text-rose-600" /> Customers Favorite
+                  </label>
+
+                  <label className={`p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer text-[11px] font-bold transition-all ${
                     formData.isOrganic ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-stone-200'
                   }`}>
                     <input
@@ -1062,7 +1256,7 @@ export const AdminProducts: React.FC = () => {
                   </label>
 
                   <label className={`p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer text-[11px] font-bold transition-all ${
-                    formData.isSuperSaver ? 'bg-rose-100 border-rose-400 text-rose-900' : 'bg-white border-stone-200'
+                    formData.isSuperSaver ? 'bg-teal-100 border-teal-400 text-teal-900' : 'bg-white border-stone-200'
                   }`}>
                     <input
                       type="checkbox"
@@ -1070,7 +1264,7 @@ export const AdminProducts: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, isSuperSaver: e.target.checked })}
                       className="hidden"
                     />
-                    <Tag className="w-3.5 h-3.5 text-rose-600" /> Super Saver
+                    <Tag className="w-3.5 h-3.5 text-teal-600" /> Super Saver
                   </label>
                 </div>
               </div>

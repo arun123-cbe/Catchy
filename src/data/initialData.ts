@@ -22,6 +22,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     isBestSeller: true,
     isOrganic: true,
     isSuperSaver: true,
+    isMostlyBought: true,
+    isCustomersFavorite: true,
     concernsHandled: ['Dullness', 'Dry Skin', 'Anti-Aging', 'Dark Spots']
   },
   {
@@ -45,6 +47,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     isBestSeller: true,
     isOrganic: true,
     isSuperSaver: false,
+    isCustomersFavorite: true,
     concernsHandled: ['Sleep & Stress', 'Fatigue', 'Anxiety', 'Muscle Relaxation']
   },
   {
@@ -69,6 +72,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     isNewArrival: false,
     isOrganic: false,
     isSuperSaver: true,
+    isMostlyBought: true,
     concernsHandled: ['Anti-Aging', 'Hair Growth', 'Joint Health', 'Skin Elasticity']
   },
   {

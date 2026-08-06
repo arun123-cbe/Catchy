@@ -1,13 +1,40 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+
+// Store Data File Path for persistent storage across devices
+const DATA_FILE_PATH = path.join(process.cwd(), 'store_data.json');
+
+// In-Memory store cache initialized from disk if available
+let serverStoreCache: Record<string, any> = {};
+
+try {
+  if (fs.existsSync(DATA_FILE_PATH)) {
+    const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
+    serverStoreCache = JSON.parse(raw);
+    console.log('Successfully loaded persistent store data from disk.');
+  }
+} catch (err) {
+  console.warn('Could not read persistent store_data.json file, initializing clean state:', err);
+}
+
+const saveStoreDataToDisk = (data: Record<string, any>) => {
+  try {
+    serverStoreCache = { ...serverStoreCache, ...data };
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(serverStoreCache, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Error writing store data to disk:', err);
+  }
+};
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Support large base64 image payloads
+  app.use(express.json({ limit: '50mb' }));
 
   // Initialize Gemini AI Client lazily or safely
   const getAiClient = () => {
@@ -29,6 +56,21 @@ async function startServer() {
   // Health API
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Store Data Sync API Endpoints for Cross-Device Synchronization
+  app.get('/api/store-data', (req, res) => {
+    res.json(serverStoreCache);
+  });
+
+  app.post('/api/store-data', (req, res) => {
+    try {
+      const updates = req.body || {};
+      saveStoreDataToDisk(updates);
+      res.json({ success: true, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to persist store data', details: err?.message });
+    }
   });
 
   // AI Personalized Recommendations Endpoint
