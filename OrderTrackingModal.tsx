@@ -1,4 +1,4 @@
-import { Product, Order, HeroSlide, HeroBannerConfig, DisplayBanner } from '../types';
+import { Product, Order } from '../types';
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
@@ -192,7 +192,7 @@ export const INITIAL_ORDERS: Order[] = [
   {
     id: 'ord-1001',
     orderNumber: 'AG-88291',
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
     customer: {
       name: 'Ananya Sharma',
       email: 'ananya.sharma@example.com',
@@ -230,124 +230,40 @@ export const INITIAL_ORDERS: Order[] = [
     },
     status: 'Processing',
     trackingNumber: 'DEL-IND-90812'
+  },
+  {
+    id: 'ord-1002',
+    orderNumber: 'AG-88292',
+    createdAt: new Date(Date.now() - 3600000 * 26).toISOString(),
+    customer: {
+      name: 'Rohan Mehta',
+      email: 'rohan.m@example.com',
+      phone: '+91 99887 76655',
+      address: '702 Skyline Towers, Worli',
+      city: 'Mumbai',
+      pincode: '400018'
+    },
+    items: [
+      {
+        productId: 'prod-2',
+        productName: 'ZenMind Ashwagandha & Mag Complex',
+        productImage: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800',
+        price: 899,
+        quantity: 2
+      }
+    ],
+    subtotal: 1798,
+    discount: 150,
+    shipping: 0,
+    tax: 82,
+    total: 1730,
+    paymentMethod: 'CARD',
+    paymentDetails: {
+      cardLast4: '4242',
+      cardBrand: 'Visa',
+      status: 'PAID'
+    },
+    status: 'Shipped',
+    trackingNumber: 'BLUEDART-881902'
   }
 ];
-
-export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
-  {
-    id: 'hero-1',
-    image: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1600',
-    linkUrl: 'Beauty & Skincare',
-    title: 'Radiant Skin Rituals',
-    active: true
-  },
-  {
-    id: 'hero-2',
-    image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=1600',
-    linkUrl: 'Hair & Body',
-    title: 'Pure Bio-Active Formulations',
-    active: true
-  },
-  {
-    id: 'hero-3',
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=1600',
-    linkUrl: 'Health & Supplements',
-    title: 'Sun Protection & Daily Glow',
-    active: true
-  }
-];
-
-export const DEFAULT_HERO_BANNER: HeroBannerConfig = {
-  headline: 'DISCOVER Healthy, Glowing Skin',
-  subheadline: 'Premium Skincare for Every You',
-  eyebrowText: 'RADIANT SKIN. EVERY DAY.',
-  pillTagline: 'CLEAN INGREDIENTS • VISIBLE RESULTS • MADE FOR YOU',
-  badgeText: 'Pure Bio-Active Health & Beauty Formulas',
-  buttonText: 'SHOP NOW',
-  secondaryButtonText: 'Take AI Skin Consultation',
-  bgImage: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1600',
-  leftImage: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=1200',
-  rightImage: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1200',
-  ctaLinkCategory: 'All',
-  overlayOpacity: 0.75
-};
-
-export const DEFAULT_DISPLAY_BANNERS: DisplayBanner[] = [
-  {
-    id: 'banner-1',
-    title: 'Monsoon Radiance & Scalp Elixir Trio',
-    subtitle: 'Save 30% on our award-winning cold-pressed rosemary & bio-active tea tree serum.',
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1200',
-    badge: 'Seasonal Super Saver',
-    buttonText: 'Shop Hair & Body',
-    categoryLink: 'Hair & Body',
-    theme: 'rose',
-    position: 'top',
-    active: true
-  },
-  {
-    id: 'banner-2',
-    title: 'Ancient Ayurvedic Immunity & Adaptogen Blends',
-    subtitle: 'KSM-66 Ashwagandha & Bio-Enriched Holy Basil for deep mental balance and energy.',
-    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=1200',
-    badge: '100% Organic Certified',
-    buttonText: 'Explore Health & Supplements',
-    categoryLink: 'Health & Supplements',
-    theme: 'emerald',
-    position: 'middle',
-    active: true
-  },
-  {
-    id: 'banner-3',
-    title: 'Luxury Pure Botanical Skincare Rituals',
-    subtitle: 'Dermatologist tested Vitamin C serum and multi-peptide glow concentrates.',
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=1200',
-    badge: 'Bestseller Formula',
-    buttonText: 'Shop Beauty & Skincare',
-    categoryLink: 'Beauty & Skincare',
-    theme: 'amber',
-    position: 'bottom',
-    active: true
-  }
-];
-
-export const DEFAULT_CATEGORY_THUMBNAILS: Record<string, string> = {
-  'Beauty & Skincare': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
-  'Health & Supplements': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800',
-  'Lifestyle & Wellness': 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=800',
-  'Hair & Body': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=800',
-  'Organic Food & Teas': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800',
-  'Fragrance & Aromatherapy': 'https://images.unsplash.com/photo-1615397349754-cfa2066a298e?auto=format&fit=crop&q=80&w=800',
-  'Baby & Mother Care': 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&q=80&w=800',
-  "Men's Grooming": 'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&q=80&w=800',
-  'Bath & Body Rituals': 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800',
-  'Immunity & Wellness Drinks': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
-  'Ayurveda & Herbals': 'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?auto=format&fit=crop&q=80&w=800',
-  'Fitness & Nutrition': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800',
-};
-
-export const DEFAULT_CATEGORIES = [
-  'Beauty & Skincare',
-  'Health & Supplements',
-  'Lifestyle & Wellness',
-  'Hair & Body',
-  'Organic Food & Teas',
-  'Fragrance & Aromatherapy',
-  'Baby & Mother Care',
-  "Men's Grooming",
-  'Bath & Body Rituals',
-  'Immunity & Wellness Drinks',
-  'Ayurveda & Herbals',
-  'Fitness & Nutrition'
-];
-
-export const DEFAULT_STORE_DATA = {
-  products: INITIAL_PRODUCTS,
-  categories: DEFAULT_CATEGORIES,
-  categoryThumbnails: DEFAULT_CATEGORY_THUMBNAILS,
-  heroSlides: DEFAULT_HERO_SLIDES,
-  heroBannerConfig: DEFAULT_HERO_BANNER,
-  homepageBanners: DEFAULT_DISPLAY_BANNERS,
-  customLogoUrl: null,
-  orders: INITIAL_ORDERS
-};
