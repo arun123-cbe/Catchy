@@ -4,7 +4,12 @@ let isConnected = false;
 
 export async function connectMongoDB(): Promise<boolean> {
   const defaultAtlasUri = 'mongodb+srv://inhausdigitale_db_user:1mMBARW4WsGL7hl8@cluster0.stlnzap.mongodb.net/auraglow_db?retryWrites=true&w=majority';
-  const mongoUri = process.env.MONGODB_URI || defaultAtlasUri;
+  let mongoUri = (process.env.MONGODB_URI || defaultAtlasUri).trim();
+  // Clean up if user accidentally pasted MONGODB_URI="..." into the value field
+  if (mongoUri.startsWith('MONGODB_URI=')) {
+    mongoUri = mongoUri.replace(/^MONGODB_URI=\s*/, '');
+  }
+  mongoUri = mongoUri.replace(/^["']|["']$/g, '').trim();
 
   if (isConnected && mongoose.connection.readyState === 1) {
     return true;

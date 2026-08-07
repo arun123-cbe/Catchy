@@ -40,24 +40,38 @@ const saveStoreDataToDisk = (data: Record<string, any>) => {
   }
 };
 
+function sanitizeMongoDoc(doc: any) {
+  if (!doc) return doc;
+  const { _id, __v, createdAt, updatedAt, ...clean } = doc;
+  return clean;
+}
+
 // Sync memory/disk cache to MongoDB database
 async function syncToMongoDB(data: Record<string, any>) {
   if (!isMongoDBConnected()) return;
   try {
     // 1. Sync Products
-    if (Array.isArray(data.products) && data.products.length > 0) {
+    if (Array.isArray(data.products)) {
+      const activeProductIds = data.products.map((p: any) => p.id).filter(Boolean);
+      if (activeProductIds.length > 0) {
+        await ProductModel.deleteMany({ id: { $nin: activeProductIds } });
+      } else {
+        await ProductModel.deleteMany({});
+      }
       for (const prod of data.products) {
         if (prod.id) {
-          await ProductModel.findOneAndUpdate({ id: prod.id }, prod, { upsert: true, new: true });
+          const cleanProd = sanitizeMongoDoc(prod);
+          await ProductModel.findOneAndUpdate({ id: prod.id }, cleanProd, { upsert: true, new: true });
         }
       }
     }
 
     // 2. Sync Orders
-    if (Array.isArray(data.orders) && data.orders.length > 0) {
+    if (Array.isArray(data.orders)) {
       for (const ord of data.orders) {
         if (ord.id) {
-          await OrderModel.findOneAndUpdate({ id: ord.id }, ord, { upsert: true, new: true });
+          const cleanOrd = sanitizeMongoDoc(ord);
+          await OrderModel.findOneAndUpdate({ id: ord.id }, cleanOrd, { upsert: true, new: true });
         }
       }
     }
@@ -85,24 +99,27 @@ async function syncToMongoDB(data: Record<string, any>) {
 async function fetchFromMongoDB(): Promise<Record<string, any> | null> {
   if (!isMongoDBConnected()) return null;
   try {
-    const products = await ProductModel.find({}).lean();
-    const orders = await OrderModel.find({}).lean();
+    const rawProducts = await ProductModel.find({}).lean();
+    const rawOrders = await OrderModel.find({}).lean();
     const configDoc = await StoreConfigModel.findOne({ key: 'store_config' }).lean();
 
-    if (!products.length && !orders.length && !configDoc) {
+    if (!rawProducts.length && !rawOrders.length && !configDoc) {
       return null;
     }
 
+    const cleanProducts = rawProducts.map(sanitizeMongoDoc);
+    const cleanOrders = rawOrders.map(sanitizeMongoDoc);
+
     return {
-      products: products.length ? products : serverStoreCache.products,
-      orders: orders.length ? orders : serverStoreCache.orders,
+      products: cleanProducts.length ? cleanProducts : serverStoreCache.products,
+      orders: cleanOrders.length ? cleanOrders : serverStoreCache.orders,
       categories: configDoc?.categories || serverStoreCache.categories,
       categoryThumbnails: configDoc?.categoryThumbnails || serverStoreCache.categoryThumbnails,
       heroSlides: configDoc?.heroSlides || serverStoreCache.heroSlides,
       heroBannerConfig: configDoc?.heroBannerConfig || serverStoreCache.heroBannerConfig,
       homepageBanners: configDoc?.homepageBanners || serverStoreCache.homepageBanners,
       customLogoUrl: configDoc?.customLogoUrl ?? serverStoreCache.customLogoUrl,
-      _updatedAt: Date.now(),
+      _updatedAt: serverStoreCache._updatedAt || Date.now(),
     };
   } catch (err) {
     console.error('[MongoDB Fetch Error]:', err);
@@ -115,7 +132,20 @@ async function startServer() {
   const PORT = 3000;
 
   // Attempt MongoDB Connection at server startup
-  await connectMongoDB();
+  const mongoOk = await connectMongoDB();
+  if (mongoOk) {
+    const existing = await fetchFromMongoDB();
+    if (!existing) {
+      console.log('[MongoDB] MongoDB is empty. Seeding initial store data to MongoDB...');
+      await syncToMongoDB(serverStoreCache);
+      console.log('[MongoDB] ✅ Initial store data seeded successfully!');
+    } else {
+      serverStoreCache = { ...serverStoreCache, ...existing };
+      // Always sync back to ensure schemas/collections exist
+      await syncToMongoDB(serverStoreCache);
+      console.log('[MongoDB] ✅ Loaded existing data and synced to MongoDB!');
+    }
+  }
 
   // Support large base64 image payloads
   app.use(express.json({ limit: '50mb' }));
