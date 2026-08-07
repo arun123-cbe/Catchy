@@ -10,7 +10,7 @@ import {
   DEFAULT_CATEGORIES
 } from '../data/defaultStoreData';
 import { db } from '../lib/firebase';
-import { doc, collection, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, deleteDoc, getDocFromServer } from 'firebase/firestore';
 
 interface StoreContextType {
   products: Product[];
@@ -316,27 +316,78 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dataPayload)
-    }).catch(err => console.warn('Server sync error:', err));
+    })
+      .then(res => {
+        if (res.ok) {
+          console.log('[Express Server Sync Diagnostic] ✅ Successfully synced dataPayload to /api/store-data');
+        } else {
+          console.warn(`[Express Server Sync Diagnostic Warning] /api/store-data responded with status ${res.status}`);
+        }
+      })
+      .catch(err => console.warn('[Express Server Sync Diagnostic Error] Server sync request failed:', err));
 
     // 2. Sync with Firebase Firestore cloud database if quota is not exhausted
-    if (firestoreQuotaExhaustedRef.current) return;
+    if (firestoreQuotaExhaustedRef.current) {
+      console.warn('[Firestore Write Diagnostic Warning] Skipping Firestore sync because quota was previously marked exhausted.');
+      return;
+    }
 
     try {
       const handleFsErr = (err: any) => {
+        console.error('[Firestore Write Diagnostic Error] Firestore write error handler invoked:', {
+          code: err?.code,
+          message: err?.message,
+          error: err
+        });
         if (err?.code === 'resource-exhausted' || err?.message?.includes('resource-exhausted') || err?.message?.includes('Quota limit exceeded')) {
           firestoreQuotaExhaustedRef.current = true;
           try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
+          console.error('[Firestore Write Diagnostic Error] Firestore quota exhausted limit reached.');
         }
       };
 
       if (dataPayload.products !== undefined && Array.isArray(dataPayload.products)) {
-        const payloadStr = JSON.stringify({ products: dataPayload.products });
+        console.log(`[Firestore Write Diagnostic] Initiating product sync for ${dataPayload.products.length} products...`);
+        const payloadStr = JSON.stringify({ products: dataPayload.products, _updatedAt: Date.now() });
+        const payloadKB = Math.round(payloadStr.length / 1024);
+        console.log(`[Firestore Write Diagnostic] store/products document payload size: ${payloadKB} KB (${payloadStr.length} bytes)`);
+
         if (payloadStr.length < 800000) {
-          setDoc(doc(db, 'store', 'products'), { products: dataPayload.products }, { merge: true }).catch(handleFsErr);
+          setDoc(doc(db, 'store', 'products'), { products: dataPayload.products, _updatedAt: Date.now() }, { merge: true })
+            .then(() => {
+              console.log(`[Firestore Write Diagnostic] ✅ Successfully saved store/products document (${dataPayload.products.length} products, ${payloadKB} KB) to Firestore!`);
+            })
+            .catch((err: any) => {
+              console.error('[Firestore Write Diagnostic Error] Failed to write store/products document to Firestore:', {
+                code: err?.code,
+                message: err?.message,
+                error: err
+              });
+              handleFsErr(err);
+            });
+        } else {
+          console.warn(`[Firestore Write Diagnostic Warning] Payload size (${payloadKB} KB) exceeds 800 KB limit for single document store/products. Bypassing single document update to prevent Firestore 1MB document size limit. Syncing products individually to v2_products collection instead.`);
         }
+
         dataPayload.products.forEach((p: Product) => {
           if (p && p.id) {
-            setDoc(doc(db, 'v2_products', p.id), p, { merge: true }).catch(handleFsErr);
+            const imageLen = p.image ? p.image.length : 0;
+            const imageKB = Math.round(imageLen / 1024);
+            if (imageLen > 500000) {
+              console.warn(`[Firestore Write Diagnostic Warning] Product "${p.name}" (ID: ${p.id}) has a large image payload (${imageKB} KB). Large base64 strings may impact Firestore write performance.`);
+            }
+            setDoc(doc(db, 'v2_products', p.id), { ...p, _updatedAt: Date.now() }, { merge: true })
+              .then(() => {
+                console.log(`[Firestore Write Diagnostic] ✅ Successfully saved product "${p.name}" (ID: ${p.id}) to v2_products collection in Firestore.`);
+              })
+              .catch((err: any) => {
+                console.error(`[Firestore Write Diagnostic Error] Failed to save product "${p.name}" (ID: ${p.id}) to v2_products collection:`, {
+                  code: err?.code,
+                  message: err?.message,
+                  error: err
+                });
+                handleFsErr(err);
+              });
           }
         });
       }
@@ -345,23 +396,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (dataPayload.homepageBanners !== undefined) bannerPayload.homepageBanners = dataPayload.homepageBanners;
         if (dataPayload.heroBannerConfig !== undefined) bannerPayload.heroBannerConfig = dataPayload.heroBannerConfig;
         if (dataPayload.heroSlides !== undefined) bannerPayload.heroSlides = dataPayload.heroSlides;
-        setDoc(doc(db, 'store', 'banners'), bannerPayload, { merge: true }).catch(handleFsErr);
+        setDoc(doc(db, 'store', 'banners'), bannerPayload, { merge: true })
+          .then(() => console.log('[Firestore Write Diagnostic] ✅ Banners updated in Firestore.'))
+          .catch(handleFsErr);
       }
       if (dataPayload.categories !== undefined || dataPayload.categoryThumbnails !== undefined || dataPayload.customLogoUrl !== undefined) {
         const catPayload: Record<string, any> = {};
         if (dataPayload.categories !== undefined) catPayload.categories = dataPayload.categories;
         if (dataPayload.categoryThumbnails !== undefined) catPayload.categoryThumbnails = dataPayload.categoryThumbnails;
         if (dataPayload.customLogoUrl !== undefined) catPayload.customLogoUrl = dataPayload.customLogoUrl;
-        setDoc(doc(db, 'store', 'categories'), catPayload, { merge: true }).catch(handleFsErr);
+        setDoc(doc(db, 'store', 'categories'), catPayload, { merge: true })
+          .then(() => console.log('[Firestore Write Diagnostic] ✅ Categories updated in Firestore.'))
+          .catch(handleFsErr);
       }
       if (dataPayload.orders !== undefined) {
-        setDoc(doc(db, 'store', 'orders'), { orders: dataPayload.orders }, { merge: true }).catch(handleFsErr);
+        setDoc(doc(db, 'store', 'orders'), { orders: dataPayload.orders }, { merge: true })
+          .then(() => console.log('[Firestore Write Diagnostic] ✅ Orders updated in Firestore.'))
+          .catch(handleFsErr);
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[Firestore Write Diagnostic Error] Unexpected exception in pushToServer:', e);
       firestoreQuotaExhaustedRef.current = true;
       try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
     }
   };
+
+  // Initial direct connection diagnostic check to verify Firestore pull capability
+  useEffect(() => {
+    async function testFirestoreConnection() {
+      if (firestoreQuotaExhaustedRef.current) return;
+      try {
+        const snap = await getDocFromServer(doc(db, 'store', 'products'));
+        if (snap.exists()) {
+          const d = snap.data();
+          console.log('[Firestore Connection Diagnostic] Initial server fetch successful! Current store/products document state:', {
+            timestamp: new Date().toISOString(),
+            exists: true,
+            productCount: Array.isArray(d?.products) ? d.products.length : 0,
+            products: d?.products
+          });
+        } else {
+          console.warn('[Firestore Connection Diagnostic] Initial server fetch: document store/products does not exist in Firestore.');
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('offline') || err?.code === 'unavailable') {
+          console.error('[Firestore Connection Diagnostic] Client is offline or Firestore service is unavailable:', err.message);
+        } else {
+          console.log('[Firestore Connection Diagnostic] Initial fetch check message:', err?.message || err);
+        }
+      }
+    }
+    testFirestoreConnection();
+  }, []);
 
   // Firestore Real-Time Listeners for Cross-Device Instant Synchronization
   useEffect(() => {
@@ -371,14 +457,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const handleSync = (data: any) => {
       if (!data || typeof data !== 'object') return;
-      // Skip listener override if local mutation happened in the last 15 seconds
-      if (Date.now() - lastLocalMutationTimeRef.current < 15000) return;
 
       if (Array.isArray(data.products) && data.products.length > 0) {
+        console.log(`[Firestore Diagnostic] Fetched ${data.products.length} products from Firestore snapshot:`, {
+          timestamp: new Date().toISOString(),
+          productCount: data.products.length,
+          productNames: data.products.map((p: any) => p.name),
+          updatedAt: data._updatedAt,
+          products: data.products
+        });
+
+        // Skip listener override only if local mutation happened in the last 2 seconds AND server timestamp is strictly older
+        const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 2000;
+        const isServerDataOlder = data._updatedAt && data._updatedAt < lastLocalMutationTimeRef.current;
+
+        if (isRecentLocalMutation && isServerDataOlder) {
+          console.log('[Firestore Diagnostic] Skipping product state override due to recent local mutation with older server payload.');
+          return;
+        }
+
         const serialized = JSON.stringify(data.products);
         if (lastSyncedRef.current.products !== serialized) {
           lastSyncedRef.current.products = serialized;
           setProducts(data.products);
+          console.log('[Firestore Diagnostic] Successfully updated React product state with latest Firestore products.');
           try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
         }
       }
@@ -442,6 +544,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     const handleFsSubErr = (err: any) => {
+      console.error('[Firestore Diagnostic Error] Subscription failed or quota limit reached:', err);
       if (err?.code === 'resource-exhausted' || err?.message?.includes('resource-exhausted') || err?.message?.includes('Quota limit exceeded')) {
         firestoreQuotaExhaustedRef.current = true;
         try { sessionStorage.setItem('fs_quota_exhausted', 'true'); } catch (_) {}
@@ -449,26 +552,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     try {
-      unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
+      unsubs.push(onSnapshot(doc(db, 'store', 'products'), (snap) => {
+        if (snap.exists()) {
+          console.log('[Firestore Diagnostic] onSnapshot received doc store/products:', snap.data());
+          handleSync(snap.data());
+        } else {
+          console.warn('[Firestore Diagnostic] Document store/products does not exist in Firestore.');
+        }
+      }, handleFsSubErr));
+
       unsubs.push(onSnapshot(collection(db, 'v2_products'), (snap) => {
         if (snap && !snap.empty) {
-          if (Date.now() - lastLocalMutationTimeRef.current < 15000) return;
           const prodsFromColl = snap.docs.map(d => d.data() as Product);
+          console.log(`[Firestore Diagnostic] Fetched ${prodsFromColl.length} products from v2_products collection:`, {
+            timestamp: new Date().toISOString(),
+            count: prodsFromColl.length,
+            products: prodsFromColl
+          });
+
+          if (Date.now() - lastLocalMutationTimeRef.current < 2000) {
+            console.log('[Firestore Diagnostic] Skipping v2_products collection override due to recent local mutation within 2s.');
+            return;
+          }
           if (prodsFromColl.length > 0) {
             const serialized = JSON.stringify(prodsFromColl);
             if (lastSyncedRef.current.products !== serialized) {
               lastSyncedRef.current.products = serialized;
               setProducts(prodsFromColl);
+              console.log('[Firestore Diagnostic] Updated products from v2_products collection.');
               try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
             }
           }
         }
       }, handleFsSubErr));
+
       unsubs.push(onSnapshot(doc(db, 'store', 'banners'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
       unsubs.push(onSnapshot(doc(db, 'store', 'categories'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
       unsubs.push(onSnapshot(doc(db, 'store', 'orders'), (snap) => snap.exists() && handleSync(snap.data()), handleFsSubErr));
     } catch (err) {
-      // Ignore listener setup error if quota reached
+      console.error('[Firestore Diagnostic Error] Setup onSnapshot failed:', err);
     }
 
     return () => {
@@ -487,15 +609,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!res.ok) return;
       const data = await res.json();
       
-      // If a local mutation was performed recently (within 15s), ignore server products override to prevent race conditions
-      const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 15000;
+      // If a local mutation was performed recently AND server data is older, skip to prevent race conditions
+      const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 2000;
+      const isServerDataOlder = data._updatedAt && data._updatedAt < lastLocalMutationTimeRef.current;
+      const shouldSkipProductSync = isRecentLocalMutation && isServerDataOlder;
 
       if (data && typeof data === 'object') {
-        if (!isRecentLocalMutation && Array.isArray(data.products) && data.products.length > 0) {
+        if (Array.isArray(data.products) && data.products.length > 0) {
+          console.log(`[Server Store Data Diagnostic] Fetched ${data.products.length} products from /api/store-data:`, {
+            timestamp: new Date().toISOString(),
+            count: data.products.length,
+            shouldSkipProductSync,
+            updatedAt: data._updatedAt,
+            products: data.products
+          });
+        }
+
+        if (!shouldSkipProductSync && Array.isArray(data.products) && data.products.length > 0) {
           const serialized = JSON.stringify(data.products);
           if (lastSyncedRef.current.products !== serialized) {
             lastSyncedRef.current.products = serialized;
             setProducts(data.products);
+            console.log('[Server Store Data Diagnostic] React product state updated from /api/store-data.');
             try { localStorage.setItem('auraglow_products_v2', serialized); } catch (_) {}
           }
         }
@@ -839,12 +974,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...newProd,
       id: `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
+    console.log(`[StoreContext Diagnostic] addProduct called for "${created.name}" (ID: ${created.id}). Image length: ${created.image ? created.image.length : 0}`);
 
-    setProducts(prev => {
-      const nextProducts = [created, ...prev];
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = [created, ...products];
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
 
     if (newProd.category && !categories.includes(newProd.category)) {
       setCategories(prev => [...prev, newProd.category]);
@@ -858,59 +992,52 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...np,
       id: `prod-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`
     }));
+    console.log(`[StoreContext Diagnostic] bulkAddProducts called for ${createdList.length} products.`);
 
-    setProducts(prev => {
-      const nextProducts = [...createdList, ...prev];
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = [...createdList, ...products];
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
 
     const newCats = Array.from(new Set(newProds.map(p => p.category).filter(Boolean)));
     setCategories(prev => Array.from(new Set([...prev, ...newCats])));
   };
 
   const updateProduct = (updated: Product) => {
-    setProducts(prev => {
-      const nextProducts = prev.map(p => p.id === updated.id ? updated : p);
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    console.log(`[StoreContext Diagnostic] updateProduct called for "${updated.name}" (ID: ${updated.id}). Image length: ${updated.image ? updated.image.length : 0}`);
+    const nextProducts = products.map(p => p.id === updated.id ? updated : p);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const deleteProduct = (productId: string) => {
-    setProducts(prev => {
-      const nextProducts = prev.filter(p => p.id !== productId);
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
-    deleteDoc(doc(db, 'v2_products', productId)).catch(() => {});
+    console.log(`[StoreContext Diagnostic] deleteProduct called for ID: ${productId}`);
+    const nextProducts = products.filter(p => p.id !== productId);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
+    deleteDoc(doc(db, 'v2_products', productId))
+      .then(() => console.log(`[Firestore Delete Diagnostic] ✅ Deleted doc v2_products/${productId}`))
+      .catch(err => console.error(`[Firestore Delete Diagnostic Error] Failed to delete doc v2_products/${productId}:`, err));
   };
 
   const updateStock = (productId: string, newStock: number) => {
-    setProducts(prev => {
-      const nextProducts = prev.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p);
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = products.map(p => p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p);
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   // Bulk Product Operations
   const bulkUpdateProducts = (ids: string[], updates: Partial<Product>) => {
     if (!ids || ids.length === 0) return;
-    setProducts(prev => {
-      const nextProducts = prev.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p));
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, ...updates } : p));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const bulkDeleteProducts = (ids: string[]) => {
     if (!ids || ids.length === 0) return;
-    setProducts(prev => {
-      const nextProducts = prev.filter(p => !ids.includes(p.id));
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = products.filter(p => !ids.includes(p.id));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
     ids.forEach(id => {
       deleteDoc(doc(db, 'v2_products', id)).catch(() => {});
     });
@@ -921,20 +1048,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!categories.includes(categoryName)) {
       setCategories(prev => [...prev, categoryName]);
     }
-    setProducts(prev => {
-      const nextProducts = prev.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p));
-      pushToServer({ products: nextProducts });
-      return nextProducts;
-    });
+    const nextProducts = products.map(p => (ids.includes(p.id) ? { ...p, category: categoryName } : p));
+    setProducts(nextProducts);
+    pushToServer({ products: nextProducts });
   };
 
   const saveAllProducts = (customProducts?: Product[]) => {
+    console.log('[StoreContext Diagnostic] saveAllProducts invoked explicitly.');
     const targetProducts = customProducts || products;
+    console.log(`[StoreContext Diagnostic] Saving total ${targetProducts.length} products via pushToServer...`);
     setProducts(targetProducts);
     pushToServer({ products: targetProducts });
     try {
       localStorage.setItem('auraglow_products_v2', JSON.stringify(targetProducts));
-    } catch (_) {}
+      console.log('[StoreContext Diagnostic] ✅ Successfully cached targetProducts in LocalStorage auraglow_products_v2.');
+    } catch (err) {
+      console.error('[StoreContext Diagnostic Error] LocalStorage save error:', err);
+    }
   };
 
   // Banner Actions

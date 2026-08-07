@@ -28,19 +28,36 @@ export const AdminProducts: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handleTriggerSaveAll = () => {
-    saveAllProducts();
-    setHasUnsavedChanges(false);
-    setBulkSuccessMsg('✅ All product details, prices, and uploaded pictures have been saved and published live to the website!');
-    setTimeout(() => setBulkSuccessMsg(''), 5000);
+    console.log(`[AdminPortal Diagnostic] Triggering "Save All Changes" for ${products.length} products...`);
+    try {
+      saveAllProducts();
+      setHasUnsavedChanges(false);
+      setBulkSuccessMsg('✅ All product details, prices, and uploaded pictures have been saved and published live to the website!');
+      console.log('[AdminPortal Diagnostic] saveAllProducts completed without throwing errors.');
+      setTimeout(() => setBulkSuccessMsg(''), 5000);
+    } catch (err: any) {
+      console.error('[AdminPortal Diagnostic Error] Save All Products failed:', err);
+      setBulkSuccessMsg(`❌ Error saving products: ${err?.message || 'Unknown error'}`);
+    }
   };
 
   const handleBatchImageUpload = async (product: Product, file: File) => {
-    const compressed = await compressProductImage(file);
-    if (compressed) {
-      updateProduct({ ...product, image: compressed });
-      setHasUnsavedChanges(true);
-      setBulkSuccessMsg(`Updated picture for "${product.name}"! Click "Save All Changes" to publish live.`);
-      setTimeout(() => setBulkSuccessMsg(''), 4000);
+    console.log(`[AdminPortal Batch Image Upload] File selected for "${product.name}": ${file.name} (${(file.size / 1024).toFixed(1)} KB, type: ${file.type})`);
+    try {
+      const compressed = await compressProductImage(file);
+      if (compressed) {
+        console.log(`[AdminPortal Batch Image Upload] Image compressed for "${product.name}". Compressed length: ${compressed.length} chars (~${Math.round(compressed.length * 0.75 / 1024)} KB). Updating product...`);
+        updateProduct({ ...product, image: compressed });
+        setHasUnsavedChanges(true);
+        setBulkSuccessMsg(`Updated picture for "${product.name}"! Click "Save All Changes" to publish live.`);
+        setTimeout(() => setBulkSuccessMsg(''), 4000);
+      } else {
+        console.error(`[AdminPortal Batch Image Upload Error] compressProductImage returned empty string for file ${file.name}.`);
+        setBulkSuccessMsg(`❌ Image processing failed for "${product.name}". Please try another image file.`);
+      }
+    } catch (err: any) {
+      console.error(`[AdminPortal Batch Image Upload Error] Failed to compress image for "${product.name}":`, err);
+      setBulkSuccessMsg(`❌ Image upload error: ${err?.message || 'Failed to compress image'}`);
     }
   };
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | 'All'>('All');
@@ -173,9 +190,17 @@ export const AdminProducts: React.FC = () => {
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const compressed = await compressProductImage(file);
-      if (compressed) {
-        setFormData(prev => ({ ...prev, image: compressed }));
+      console.log(`[AdminPortal Form Image Upload] File selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB, type: ${file.type})`);
+      try {
+        const compressed = await compressProductImage(file);
+        if (compressed) {
+          console.log(`[AdminPortal Form Image Upload] Image compressed successfully. Base64 length: ${compressed.length} chars (~${Math.round(compressed.length * 0.75 / 1024)} KB). Setting form image data.`);
+          setFormData(prev => ({ ...prev, image: compressed }));
+        } else {
+          console.error(`[AdminPortal Form Image Upload Error] compressProductImage returned empty string for file ${file.name}.`);
+        }
+      } catch (err) {
+        console.error('[AdminPortal Form Image Upload Error] Failed to process image file:', err);
       }
     }
   };
@@ -224,6 +249,14 @@ export const AdminProducts: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[AdminPortal Modal Submit] Submitting product form data:', {
+      name: formData.name,
+      category: formData.category,
+      price: formData.price,
+      imageLength: formData.image ? formData.image.length : 0,
+      isEditing: !!editingProduct
+    });
+
     const parsedSpecialities = specialityInput.split(',').map(s => s.trim()).filter(Boolean);
     const parsedBenefits = benefitsInput.split(',').map(s => s.trim()).filter(Boolean);
     const parsedConcerns = concernsInput.split(',').map(s => s.trim()).filter(Boolean);
@@ -235,17 +268,24 @@ export const AdminProducts: React.FC = () => {
       concernsHandled: parsedConcerns
     };
 
-    if (editingProduct) {
-      updateProduct({ ...payload, id: editingProduct.id });
-      setBulkSuccessMsg(`Saved changes for "${payload.name}"! Published live on website.`);
-    } else {
-      const created = addProduct(payload);
-      setBulkSuccessMsg(`Added new product "${created.name}"! Published live on website.`);
+    try {
+      if (editingProduct) {
+        console.log(`[AdminPortal Modal Submit] Calling updateProduct for "${payload.name}" (ID: ${editingProduct.id})...`);
+        updateProduct({ ...payload, id: editingProduct.id });
+        setBulkSuccessMsg(`Saved changes for "${payload.name}"! Published live on website.`);
+      } else {
+        console.log(`[AdminPortal Modal Submit] Calling addProduct for new product "${payload.name}"...`);
+        const created = addProduct(payload);
+        console.log(`[AdminPortal Modal Submit] New product created with ID: ${created.id}`);
+        setBulkSuccessMsg(`Added new product "${created.name}"! Published live on website.`);
+      }
+      setHasUnsavedChanges(false);
+      setIsAddModalOpen(false);
+      setTimeout(() => setBulkSuccessMsg(''), 5000);
+    } catch (err: any) {
+      console.error('[AdminPortal Modal Submit Error] Failed to save product:', err);
+      setBulkSuccessMsg(`❌ Error saving product: ${err?.message || 'Unknown error'}`);
     }
-    saveAllProducts();
-    setHasUnsavedChanges(false);
-    setIsAddModalOpen(false);
-    setTimeout(() => setBulkSuccessMsg(''), 5000);
   };
 
   // Helper to map parsed rows to Product objects

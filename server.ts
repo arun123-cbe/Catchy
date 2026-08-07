@@ -4,6 +4,10 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { DEFAULT_STORE_DATA } from './src/data/defaultStoreData';
+import { connectMongoDB, isMongoDBConnected } from './src/db/mongodb';
+import { ProductModel } from './src/db/models/ProductModel';
+import { OrderModel } from './src/db/models/OrderModel';
+import { StoreConfigModel } from './src/db/models/StoreConfigModel';
 
 // Store Data File Path for persistent storage across devices
 const DATA_FILE_PATH = path.join(process.cwd(), 'store_data.json');
@@ -36,9 +40,82 @@ const saveStoreDataToDisk = (data: Record<string, any>) => {
   }
 };
 
+// Sync memory/disk cache to MongoDB database
+async function syncToMongoDB(data: Record<string, any>) {
+  if (!isMongoDBConnected()) return;
+  try {
+    // 1. Sync Products
+    if (Array.isArray(data.products) && data.products.length > 0) {
+      for (const prod of data.products) {
+        if (prod.id) {
+          await ProductModel.findOneAndUpdate({ id: prod.id }, prod, { upsert: true, new: true });
+        }
+      }
+    }
+
+    // 2. Sync Orders
+    if (Array.isArray(data.orders) && data.orders.length > 0) {
+      for (const ord of data.orders) {
+        if (ord.id) {
+          await OrderModel.findOneAndUpdate({ id: ord.id }, ord, { upsert: true, new: true });
+        }
+      }
+    }
+
+    // 3. Sync Store Config
+    await StoreConfigModel.findOneAndUpdate(
+      { key: 'store_config' },
+      {
+        categories: data.categories || DEFAULT_STORE_DATA.categories,
+        categoryThumbnails: data.categoryThumbnails || DEFAULT_STORE_DATA.categoryThumbnails,
+        heroSlides: data.heroSlides || DEFAULT_STORE_DATA.heroSlides,
+        heroBannerConfig: data.heroBannerConfig || DEFAULT_STORE_DATA.heroBannerConfig,
+        homepageBanners: data.homepageBanners || DEFAULT_STORE_DATA.homepageBanners,
+        customLogoUrl: data.customLogoUrl || null,
+        updatedAtTimestamp: Date.now(),
+      },
+      { upsert: true, new: true }
+    );
+  } catch (err: any) {
+    console.error('[MongoDB Sync Error] Failed to persist data to MongoDB:', err?.message || err);
+  }
+}
+
+// Fetch current state from MongoDB if connected
+async function fetchFromMongoDB(): Promise<Record<string, any> | null> {
+  if (!isMongoDBConnected()) return null;
+  try {
+    const products = await ProductModel.find({}).lean();
+    const orders = await OrderModel.find({}).lean();
+    const configDoc = await StoreConfigModel.findOne({ key: 'store_config' }).lean();
+
+    if (!products.length && !orders.length && !configDoc) {
+      return null;
+    }
+
+    return {
+      products: products.length ? products : serverStoreCache.products,
+      orders: orders.length ? orders : serverStoreCache.orders,
+      categories: configDoc?.categories || serverStoreCache.categories,
+      categoryThumbnails: configDoc?.categoryThumbnails || serverStoreCache.categoryThumbnails,
+      heroSlides: configDoc?.heroSlides || serverStoreCache.heroSlides,
+      heroBannerConfig: configDoc?.heroBannerConfig || serverStoreCache.heroBannerConfig,
+      homepageBanners: configDoc?.homepageBanners || serverStoreCache.homepageBanners,
+      customLogoUrl: configDoc?.customLogoUrl ?? serverStoreCache.customLogoUrl,
+      _updatedAt: Date.now(),
+    };
+  } catch (err) {
+    console.error('[MongoDB Fetch Error]:', err);
+    return null;
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Attempt MongoDB Connection at server startup
+  await connectMongoDB();
 
   // Support large base64 image payloads
   app.use(express.json({ limit: '50mb' }));
@@ -62,14 +139,45 @@ async function startServer() {
 
   // Health API
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), mongoConnected: isMongoDBConnected() });
+  });
+
+  // MongoDB Status Endpoint
+  app.get('/api/mongodb/status', async (req, res) => {
+    const connected = isMongoDBConnected();
+    const mongoUri = process.env.MONGODB_URI;
+    let counts = { products: 0, orders: 0 };
+
+    if (connected) {
+      try {
+        counts.products = await ProductModel.countDocuments();
+        counts.orders = await OrderModel.countDocuments();
+      } catch (_) {}
+    }
+
+    res.json({
+      connected,
+      configured: Boolean(mongoUri),
+      databaseType: 'MongoDB (Mongoose)',
+      collectionCounts: counts,
+      connectionUriFormat: 'mongodb://<username>:<password>@<hostinger-ip>:27017/auraglow_db',
+    });
   });
 
   // Store Data Sync API Endpoints for Cross-Device Synchronization
-  app.get('/api/store-data', (req, res) => {
+  app.get('/api/store-data', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+
+    // Attempt to read from MongoDB first
+    if (isMongoDBConnected()) {
+      const dbData = await fetchFromMongoDB();
+      if (dbData) {
+        serverStoreCache = { ...serverStoreCache, ...dbData };
+        return res.json(dbData);
+      }
+    }
 
     try {
       if (fs.existsSync(DATA_FILE_PATH)) {
@@ -82,23 +190,67 @@ async function startServer() {
     res.json(serverStoreCache);
   });
 
-  app.post('/api/store-data', (req, res) => {
+  app.post('/api/store-data', async (req, res) => {
     try {
       const updates = req.body || {};
       saveStoreDataToDisk(updates);
-      res.json({ success: true, timestamp: new Date().toISOString() });
+
+      // Async sync to MongoDB
+      if (isMongoDBConnected()) {
+        await syncToMongoDB(serverStoreCache);
+      }
+
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        syncedToMongoDB: isMongoDBConnected(),
+      });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to persist store data', details: err?.message });
     }
   });
 
-  app.post('/api/store-data/reset', (req, res) => {
+  app.post('/api/store-data/reset', async (req, res) => {
     try {
       serverStoreCache = JSON.parse(JSON.stringify(DEFAULT_STORE_DATA));
       fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(serverStoreCache, null, 2), 'utf-8');
+
+      if (isMongoDBConnected()) {
+        await syncToMongoDB(serverStoreCache);
+      }
+
       res.json({ success: true, storeData: serverStoreCache });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to reset store data', details: err?.message });
+    }
+  });
+
+  // Direct REST API for MongoDB Products
+  app.get('/api/mongodb/products', async (req, res) => {
+    if (!isMongoDBConnected()) {
+      return res.status(503).json({ error: 'MongoDB is not connected. Please set MONGODB_URI env var.' });
+    }
+    try {
+      const products = await ProductModel.find({}).lean();
+      res.json(products);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to fetch products from MongoDB', details: err.message });
+    }
+  });
+
+  app.post('/api/mongodb/products', async (req, res) => {
+    if (!isMongoDBConnected()) {
+      return res.status(503).json({ error: 'MongoDB is not connected. Please set MONGODB_URI env var.' });
+    }
+    try {
+      const productData = req.body;
+      const product = await ProductModel.findOneAndUpdate({ id: productData.id }, productData, {
+        upsert: true,
+        new: true,
+      });
+      res.json({ success: true, product });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to save product to MongoDB', details: err.message });
     }
   });
 
