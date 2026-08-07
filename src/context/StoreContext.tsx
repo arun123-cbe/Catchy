@@ -449,6 +449,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     testFirestoreConnection();
   }, []);
 
+  const isServerDataActiveRef = React.useRef<boolean>(false);
+
   // Firestore Real-Time Listeners for Cross-Device Instant Synchronization
   useEffect(() => {
     if (firestoreQuotaExhaustedRef.current) return;
@@ -458,7 +460,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleSync = (data: any) => {
       if (!data || typeof data !== 'object') return;
 
-      if (Array.isArray(data.products) && data.products.length > 0) {
+      // If server API (MongoDB) is active, prioritize MongoDB for products
+      if (!isServerDataActiveRef.current && Array.isArray(data.products) && data.products.length > 0) {
         console.log(`[Firestore Diagnostic] Fetched ${data.products.length} products from Firestore snapshot:`, {
           timestamp: new Date().toISOString(),
           productCount: data.products.length,
@@ -570,6 +573,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             products: prodsFromColl
           });
 
+          if (isServerDataActiveRef.current) {
+            console.log('[Firestore Diagnostic] Skipping v2_products collection override because MongoDB server API is active.');
+            return;
+          }
+
           if (Date.now() - lastLocalMutationTimeRef.current < 2000) {
             console.log('[Firestore Diagnostic] Skipping v2_products collection override due to recent local mutation within 2s.');
             return;
@@ -609,13 +617,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!res.ok) return;
       const data = await res.json();
       
+      // Mark MongoDB server API active
+      isServerDataActiveRef.current = true;
+
       // If a local mutation was performed recently AND server data is older, skip to prevent race conditions
       const isRecentLocalMutation = Date.now() - lastLocalMutationTimeRef.current < 2000;
       const isServerDataOlder = data._updatedAt && data._updatedAt < lastLocalMutationTimeRef.current;
       const shouldSkipProductSync = isRecentLocalMutation && isServerDataOlder;
 
       if (data && typeof data === 'object') {
-        if (Array.isArray(data.products) && data.products.length > 0) {
+        if (Array.isArray(data.products)) {
           console.log(`[Server Store Data Diagnostic] Fetched ${data.products.length} products from /api/store-data:`, {
             timestamp: new Date().toISOString(),
             count: data.products.length,
@@ -625,7 +636,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           });
         }
 
-        if (!shouldSkipProductSync && Array.isArray(data.products) && data.products.length > 0) {
+        if (!shouldSkipProductSync && Array.isArray(data.products)) {
           const serialized = JSON.stringify(data.products);
           if (lastSyncedRef.current.products !== serialized) {
             lastSyncedRef.current.products = serialized;

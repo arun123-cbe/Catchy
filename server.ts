@@ -53,11 +53,13 @@ async function syncToMongoDB(data: Record<string, any>) {
     // 1. Sync Products
     if (Array.isArray(data.products)) {
       const activeProductIds = data.products.map((p: any) => p.id).filter(Boolean);
-      if (activeProductIds.length > 0) {
-        await ProductModel.deleteMany({ id: { $nin: activeProductIds } });
-      } else {
-        await ProductModel.deleteMany({});
-      }
+      await ProductModel.deleteMany({
+        $or: [
+          { id: { $nin: activeProductIds } },
+          { id: { $exists: false } },
+          { id: null }
+        ]
+      });
       for (const prod of data.products) {
         if (prod.id) {
           const cleanProd = sanitizeMongoDoc(prod);
@@ -68,6 +70,10 @@ async function syncToMongoDB(data: Record<string, any>) {
 
     // 2. Sync Orders
     if (Array.isArray(data.orders)) {
+      const activeOrderIds = data.orders.map((o: any) => o.id).filter(Boolean);
+      if (activeOrderIds.length > 0) {
+        await OrderModel.deleteMany({ id: { $nin: activeOrderIds } });
+      }
       for (const ord of data.orders) {
         if (ord.id) {
           const cleanOrd = sanitizeMongoDoc(ord);
@@ -103,15 +109,11 @@ async function fetchFromMongoDB(): Promise<Record<string, any> | null> {
     const rawOrders = await OrderModel.find({}).lean();
     const configDoc = await StoreConfigModel.findOne({ key: 'store_config' }).lean();
 
-    if (!rawProducts.length && !rawOrders.length && !configDoc) {
-      return null;
-    }
-
     const cleanProducts = rawProducts.map(sanitizeMongoDoc);
     const cleanOrders = rawOrders.map(sanitizeMongoDoc);
 
     return {
-      products: cleanProducts.length ? cleanProducts : serverStoreCache.products,
+      products: cleanProducts,
       orders: cleanOrders.length ? cleanOrders : serverStoreCache.orders,
       categories: configDoc?.categories || serverStoreCache.categories,
       categoryThumbnails: configDoc?.categoryThumbnails || serverStoreCache.categoryThumbnails,
