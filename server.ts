@@ -46,29 +46,64 @@ function sanitizeMongoDoc(doc: any) {
   return clean;
 }
 
+function sanitizeProductForMongo(p: any): any {
+  if (!p || typeof p !== 'object') return null;
+  const clean = sanitizeMongoDoc(p);
+  const id = clean.id ? String(clean.id).trim() : `prod-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  const name = clean.name ? String(clean.name).trim() : 'Untitled Product';
+  const category = clean.category ? String(clean.category).trim() : 'Beauty & Skincare';
+  const price = typeof clean.price === 'number' && !isNaN(clean.price) ? clean.price : (parseFloat(String(clean.price || 0)) || 0);
+  const originalPrice = clean.originalPrice !== undefined && clean.originalPrice !== null ? (typeof clean.originalPrice === 'number' && !isNaN(clean.originalPrice) ? clean.originalPrice : (parseFloat(String(clean.originalPrice)) || undefined)) : undefined;
+  const stock = typeof clean.stock === 'number' && !isNaN(clean.stock) ? clean.stock : (parseInt(String(clean.stock || 0)) || 0);
+  const rating = typeof clean.rating === 'number' && !isNaN(clean.rating) ? clean.rating : (parseFloat(String(clean.rating || 5)) || 5);
+  const reviewCount = typeof clean.reviewCount === 'number' && !isNaN(clean.reviewCount) ? clean.reviewCount : (parseInt(String(clean.reviewCount || 0)) || 0);
+  const reorderPoint = typeof clean.reorderPoint === 'number' && !isNaN(clean.reorderPoint) ? clean.reorderPoint : (parseInt(String(clean.reorderPoint || 10)) || 10);
+
+  return {
+    ...clean,
+    id,
+    name,
+    category,
+    price,
+    originalPrice,
+    stock,
+    rating,
+    reviewCount,
+    reorderPoint,
+    tagline: clean.tagline ? String(clean.tagline) : 'Premium wellness formula',
+    image: clean.image ? String(clean.image) : 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800',
+    description: clean.description ? String(clean.description) : 'Natural organic formula.',
+    benefits: Array.isArray(clean.benefits) ? clean.benefits.map(String) : [],
+    ingredients: Array.isArray(clean.ingredients) ? clean.ingredients.map(String) : [],
+    specialities: Array.isArray(clean.specialities) ? clean.specialities.map(String) : [],
+    concernsHandled: Array.isArray(clean.concernsHandled) ? clean.concernsHandled.map(String) : [],
+    isBestSeller: Boolean(clean.isBestSeller),
+    isNewArrival: Boolean(clean.isNewArrival),
+    isOrganic: Boolean(clean.isOrganic),
+    isSuperSaver: Boolean(clean.isSuperSaver),
+    isMostlyBought: Boolean(clean.isMostlyBought),
+    isCustomersFavorite: Boolean(clean.isCustomersFavorite),
+  };
+}
+
 // Sync memory/disk cache to MongoDB database
 async function syncToMongoDB(data: Record<string, any>) {
   if (!isMongoDBConnected()) return;
   try {
-    // 1. Sync Products
+    // 1. Sync Products cleanly
     if (Array.isArray(data.products)) {
-      const activeProductIds = data.products.map((p: any) => p.id).filter(Boolean);
-      await ProductModel.deleteMany({
-        $or: [
-          { id: { $nin: activeProductIds } },
-          { id: { $exists: false } },
-          { id: null }
-        ]
-      });
-      for (const prod of data.products) {
-        if (prod.id) {
-          const cleanProd = sanitizeMongoDoc(prod);
-          await ProductModel.findOneAndUpdate({ id: prod.id }, cleanProd, { upsert: true, new: true });
-        }
+      const sanitizedProducts = data.products
+        .map(sanitizeProductForMongo)
+        .filter(Boolean);
+
+      await ProductModel.deleteMany({});
+      if (sanitizedProducts.length > 0) {
+        await ProductModel.insertMany(sanitizedProducts, { ordered: false });
       }
+      console.log(`[MongoDB Sync] ✅ Successfully synced ${sanitizedProducts.length} products to MongoDB!`);
     }
 
-    // 2. Sync Orders
+    // 2. Sync Orders cleanly
     if (Array.isArray(data.orders)) {
       const activeOrderIds = data.orders.map((o: any) => o.id).filter(Boolean);
       if (activeOrderIds.length > 0) {
@@ -109,6 +144,12 @@ async function fetchFromMongoDB(): Promise<Record<string, any> | null> {
     const rawOrders = await OrderModel.find({}).lean();
     const configDoc = await StoreConfigModel.findOne({ key: 'store_config' }).lean();
 
+    if (rawProducts.length === 0 && serverStoreCache.products && serverStoreCache.products.length > 0) {
+      console.log('[MongoDB] Product collection is empty in MongoDB. Seeding initial store cache to MongoDB...');
+      await syncToMongoDB(serverStoreCache);
+      return serverStoreCache;
+    }
+
     const cleanProducts = rawProducts.map(sanitizeMongoDoc);
     const cleanOrders = rawOrders.map(sanitizeMongoDoc);
 
@@ -121,7 +162,7 @@ async function fetchFromMongoDB(): Promise<Record<string, any> | null> {
       heroBannerConfig: configDoc?.heroBannerConfig || serverStoreCache.heroBannerConfig,
       homepageBanners: configDoc?.homepageBanners || serverStoreCache.homepageBanners,
       customLogoUrl: configDoc?.customLogoUrl ?? serverStoreCache.customLogoUrl,
-      _updatedAt: serverStoreCache._updatedAt || Date.now(),
+      _updatedAt: configDoc?.updatedAtTimestamp || serverStoreCache._updatedAt || Date.now(),
     };
   } catch (err) {
     console.error('[MongoDB Fetch Error]:', err);

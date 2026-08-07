@@ -291,36 +291,92 @@ export const AdminProducts: React.FC = () => {
   // Helper to map parsed rows to Product objects
   const processParsedData = (rawData: any[]) => {
     try {
-      const parsedProducts: Omit<Product, 'id'>[] = rawData.map((row: any, idx: number) => {
-        if (!row.name || !row.price) {
-          throw new Error(`Row ${idx + 1} is missing required fields (name, price)`);
-        }
+      if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+        setCsvError('No valid rows found in CSV or pasted table.');
+        return;
+      }
 
-        return {
-          name: row.name || 'Bulk Product',
-          tagline: row.tagline || 'Premium wellness formula',
-          category: row.category || 'Beauty & Skincare',
-          price: parseFloat(row.price) || 499,
-          originalPrice: row.originalPrice ? parseFloat(row.originalPrice) : undefined,
-          rating: parseFloat(row.rating) || 4.8,
-          reviewCount: parseInt(row.reviewCount) || 10,
-          image: row.image || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800',
-          description: row.description || 'Natural organic formula.',
-          benefits: row.benefits ? row.benefits.split(';').map((b: string) => b.trim()) : ['Nourishes skin'],
-          ingredients: row.ingredients ? row.ingredients.split(';').map((i: string) => i.trim()) : ['Botanical oil'],
-          specialities: row.specialities ? row.specialities.split(';').map((s: string) => s.trim()) : ['Organic', 'Dermatologist Tested'],
-          isBestSeller: row.isBestSeller === 'true' || row.isBestSeller === '1' || row.isBestSeller === 'TRUE',
-          isNewArrival: row.isNewArrival === 'true' || row.isNewArrival === '1' || row.isNewArrival === 'TRUE',
-          isOrganic: row.isOrganic === 'true' || row.isOrganic === '1' || row.isOrganic === 'TRUE',
-          isSuperSaver: row.isSuperSaver === 'true' || row.isSuperSaver === '1' || row.isSuperSaver === 'TRUE',
-          isMostlyBought: row.isMostlyBought === 'true' || row.isMostlyBought === '1' || row.isMostlyBought === 'TRUE',
-          isCustomersFavorite: row.isCustomersFavorite === 'true' || row.isCustomersFavorite === '1' || row.isCustomersFavorite === 'TRUE',
-          stock: parseInt(row.stock) || 50,
-          reorderPoint: parseInt(row.reorderPoint) || 10,
-          sku: row.sku || `BULK-${Date.now()}-${idx}`,
-          concernsHandled: row.concernsHandled ? row.concernsHandled.split(';').map((c: string) => c.trim()) : ['Glow', 'Vitality']
-        };
-      });
+      const parsedProducts: Omit<Product, 'id'>[] = rawData
+        .filter((rawRow: any) => rawRow && typeof rawRow === 'object' && Object.keys(rawRow).length > 0)
+        .map((rawRow: any, idx: number) => {
+          // Normalize row keys to lower-case trimmed string
+          const row: Record<string, any> = {};
+          Object.keys(rawRow).forEach(key => {
+            if (key) {
+              row[key.trim().toLowerCase()] = rawRow[key];
+            }
+          });
+
+          // Look for name field with fallbacks
+          const nameVal = row.name || row.title || row['product name'] || row['product_name'] || row['item name'] || `Bulk Product ${idx + 1}`;
+          
+          // Look for price field with fallbacks
+          const rawPriceVal = row.price || row['unit price'] || row.cost || row['sale price'] || '499';
+          const cleanPriceStr = String(rawPriceVal).replace(/[^0-9.]/g, '');
+          const priceVal = parseFloat(cleanPriceStr) || 499;
+
+          // Look for original price
+          const rawOrigPriceVal = row.originalprice || row['original price'] || row['list price'] || row.msrp;
+          let origPriceVal: number | undefined = undefined;
+          if (rawOrigPriceVal) {
+            const cleanOrig = String(rawOrigPriceVal).replace(/[^0-9.]/g, '');
+            origPriceVal = parseFloat(cleanOrig) || undefined;
+          }
+
+          // Look for image field
+          const imageVal = row.image || row['image url'] || row.photo || row.img || row.picture || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800';
+
+          // Category
+          const categoryVal = row.category || row.type || row['product type'] || categories[0] || 'Beauty & Skincare';
+
+          // Stock
+          const stockVal = parseInt(String(row.stock || row.quantity || row.qty || '50').replace(/[^0-9]/g, '')) || 50;
+
+          // Helper for list fields (semicolon or comma split)
+          const parseList = (val: any) => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val;
+            const str = String(val);
+            const delimiter = str.includes(';') ? ';' : ',';
+            return str.split(delimiter).map(s => s.trim()).filter(Boolean);
+          };
+
+          const parseBool = (val: any) => {
+            if (typeof val === 'boolean') return val;
+            const s = String(val).trim().toLowerCase();
+            return s === 'true' || s === '1' || s === 'yes';
+          };
+
+          return {
+            name: String(nameVal).trim(),
+            tagline: row.tagline ? String(row.tagline).trim() : 'Premium wellness formula',
+            category: String(categoryVal).trim(),
+            price: priceVal,
+            originalPrice: origPriceVal,
+            rating: parseFloat(row.rating) || 4.8,
+            reviewCount: parseInt(row.reviewcount || row['review count']) || 10,
+            image: String(imageVal).trim(),
+            description: row.description ? String(row.description).trim() : 'Natural organic formula.',
+            benefits: parseList(row.benefits).length ? parseList(row.benefits) : ['Nourishes skin'],
+            ingredients: parseList(row.ingredients).length ? parseList(row.ingredients) : ['Botanical oil'],
+            specialities: parseList(row.specialities).length ? parseList(row.specialities) : ['Organic', 'Dermatologist Tested'],
+            isBestSeller: parseBool(row.isbestseller || row['is best seller']),
+            isNewArrival: parseBool(row.isnewarrival || row['is new arrival']),
+            isOrganic: parseBool(row.isorganic || row['is organic']),
+            isSuperSaver: parseBool(row.issupersaver || row['is super saver']),
+            isMostlyBought: parseBool(row.ismostlybought || row['is mostly bought']),
+            isCustomersFavorite: parseBool(row.iscustomersfavorite || row['is customers favorite']),
+            stock: stockVal,
+            reorderPoint: parseInt(row.reorderpoint || row['reorder point']) || 10,
+            sku: row.sku ? String(row.sku).trim() : `BULK-${Date.now()}-${idx}`,
+            concernsHandled: parseList(row.concernshandled || row['concerns handled']).length ? parseList(row.concernshandled || row['concerns handled']) : ['Glow', 'Vitality']
+          };
+        });
+
+      if (parsedProducts.length === 0) {
+        setCsvError('No valid product rows could be extracted.');
+        return;
+      }
 
       setCsvPreview(parsedProducts);
       setCsvError('');
@@ -339,7 +395,8 @@ export const AdminProducts: React.FC = () => {
 
     Papa.parse(file, {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
+      transformHeader: (h) => h.trim(),
       complete: (results) => {
         processParsedData(results.data);
       },
@@ -359,7 +416,8 @@ export const AdminProducts: React.FC = () => {
     setCsvError('');
     Papa.parse(pastedText.trim(), {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
+      transformHeader: (h) => h.trim(),
       complete: (results) => {
         if (!results.data || results.data.length === 0) {
           setCsvError('No valid tabular rows found in pasted text.');
@@ -491,11 +549,12 @@ export const AdminProducts: React.FC = () => {
 
   const handleConfirmBulkUpload = () => {
     if (csvPreview.length > 0) {
+      console.log(`[AdminPortal Bulk Import] Importing ${csvPreview.length} products...`);
       bulkAddProducts(csvPreview);
-      saveAllProducts();
       setIsBulkModalOpen(false);
       setCsvPreview([]);
       setCsvFileName('');
+      setPastedText('');
       setBulkSuccessMsg(`Successfully imported & published ${csvPreview.length} products live to the website!`);
       setTimeout(() => setBulkSuccessMsg(''), 5000);
     }
